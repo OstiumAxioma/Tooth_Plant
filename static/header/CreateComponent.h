@@ -4,9 +4,6 @@
 #include <memory>
 
 // 前向声明VTK类，避免在头文件中包含VTK头文件
-class vtkRenderer;
-class vtkRenderWindow;
-class vtkRenderWindowInteractor;
 class vtkActor;
 class vtkPolyDataMapper;
 class vtkCylinderSource;
@@ -18,29 +15,15 @@ public:
     ComponentCreator();
     ~ComponentCreator();
 
-    // 初始化渲染器
-    void InitializeRenderer();
+    // 设置圆柱起点/终点
+    void SetStartPoint(double x, double y, double z);
+    void SetEndPoint(double x, double y, double z);
 
-    // 设置渲染窗口
-    void SetRenderWindow(vtkRenderWindow* window);
+    // 生成Actor（基于当前起点/终点）
+    bool BuildActor(double radius = 1.0, int resolution = 32);
 
-    // 获取渲染器
-    vtkRenderer* GetRenderer();
-
-    // 创建圆柱体
-    void CreateCylinder(double radius = 1.0, double height = 2.0, int resolution = 20);
-
-    // 清除所有Actor
-    void ClearActors();
-
-    // 重置相机
-    void ResetCamera();
-
-    // 渲染
-    void Render();
-
-    // 设置背景颜色
-    void SetBackground(double r, double g, double b);
+    // 获取生成的Actor
+    vtkActor* GetActor() const;
 
 private:
     class Impl;
