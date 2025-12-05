@@ -12,9 +12,11 @@
 #include <vtkPoints.h>
 #include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
+#include <vtkPolyLine.h>
 #include <vtkSmartPointer.h>
 #include <vtkSphereSource.h>
 #include <vtkTriangle.h>
+#include <vtkTubeFilter.h>
 
 namespace CreateComponent {
 
@@ -27,6 +29,8 @@ public:
     double headHeight{-1.0};
     double baseTopRadius{-1.0};
     int resolution{32};
+    double threadDepth{0.0};
+    int threadTurns{0};
 
     vtkSmartPointer<vtkActor> actor;
     vtkSmartPointer<vtkPolyDataMapper> mapper;
@@ -52,6 +56,8 @@ void ComponentCreator::SetNeckHeight(double height) { pImpl->neckHeight = height
 void ComponentCreator::SetHeadHeight(double height) { pImpl->headHeight = height; }
 void ComponentCreator::SetBaseTopRadius(double radius) { pImpl->baseTopRadius = radius; }
 void ComponentCreator::SetResolution(int resolution) { pImpl->resolution = resolution; }
+void ComponentCreator::SetThreadDepth(double depth) { pImpl->threadDepth = depth; }
+void ComponentCreator::SetThreadTurns(int turns) { pImpl->threadTurns = turns; }
 
 namespace {
 
@@ -180,6 +186,103 @@ vtkSmartPointer<vtkPolyData> BuildCylinderWorld(double radius, double height, in
     return poly;
 }
 
+vtkSmartPointer<vtkPolyData> BuildThreadedCylinderWorld(double radius, double depth, double height, int turns,
+                                                        int resolution, double z0,
+                                                        const double start[3], const Basis& basis) {
+    if (turns <= 0 || depth <= 0.0) {
+        return BuildCylinderWorld(radius, height, resolution, z0, start, basis);
+    }
+
+    int resTheta = std::max(16, resolution);
+    int resZ = std::max(resolution * turns * 2, turns * 16);
+    double full = vtkMath::Pi() * 2.0;
+    double pitch = height / static_cast<double>(turns);
+
+    auto points = vtkSmartPointer<vtkPoints>::New();
+    auto polys = vtkSmartPointer<vtkCellArray>::New();
+
+    auto radiusAt = [&](double z, double theta) {
+        double phase = (z / pitch) - (theta / full);
+        double wave = std::sin(full * phase);
+        return radius + depth * wave; // 正负起伏，形成螺纹
+    };
+
+    auto pointId = [&](int iz, int it) {
+        int idx = iz * resTheta + (it % resTheta);
+        return static_cast<vtkIdType>(idx);
+    };
+
+    // 生成点
+    for (int iz = 0; iz <= resZ; ++iz) {
+        double tz = static_cast<double>(iz) / resZ;
+        double z = z0 + height * tz;
+        for (int it = 0; it < resTheta; ++it) {
+            double theta = full * it / resTheta;
+            double r = radiusAt(z - z0, theta);
+            double c = std::cos(theta), s = std::sin(theta);
+            double x = start[0] + basis.n[0] * z + basis.u[0] * r * c + basis.v[0] * r * s;
+            double y = start[1] + basis.n[1] * z + basis.u[1] * r * c + basis.v[1] * r * s;
+            double zc = start[2] + basis.n[2] * z + basis.u[2] * r * c + basis.v[2] * r * s;
+            points->InsertNextPoint(x, y, zc);
+        }
+    }
+
+    // 侧面三角
+    for (int iz = 0; iz < resZ; ++iz) {
+        for (int it = 0; it < resTheta; ++it) {
+            vtkIdType p00 = pointId(iz, it);
+            vtkIdType p01 = pointId(iz, it + 1);
+            vtkIdType p10 = pointId(iz + 1, it);
+            vtkIdType p11 = pointId(iz + 1, it + 1);
+
+            auto tri1 = vtkSmartPointer<vtkTriangle>::New();
+            tri1->GetPointIds()->SetId(0, p00);
+            tri1->GetPointIds()->SetId(1, p01);
+            tri1->GetPointIds()->SetId(2, p11);
+            polys->InsertNextCell(tri1);
+
+            auto tri2 = vtkSmartPointer<vtkTriangle>::New();
+            tri2->GetPointIds()->SetId(0, p00);
+            tri2->GetPointIds()->SetId(1, p11);
+            tri2->GetPointIds()->SetId(2, p10);
+            polys->InsertNextCell(tri2);
+        }
+    }
+
+    // 顶盖/底盖使用平均半径封闭
+    auto addCap = [&](bool top) {
+        int iz = top ? resZ : 0;
+        double z = z0 + height * (top ? 1.0 : 0.0);
+        double avgR = radius; // 取基准半径封盖
+        double center[3] = { start[0] + basis.n[0] * z,
+                             start[1] + basis.n[1] * z,
+                             start[2] + basis.n[2] * z };
+        vtkIdType centerId = points->InsertNextPoint(center);
+        for (int it = 0; it < resTheta; ++it) {
+            vtkIdType p0 = pointId(iz, it);
+            vtkIdType p1 = pointId(iz, it + 1);
+            auto tri = vtkSmartPointer<vtkTriangle>::New();
+            if (top) {
+                tri->GetPointIds()->SetId(0, centerId);
+                tri->GetPointIds()->SetId(1, p1);
+                tri->GetPointIds()->SetId(2, p0);
+            } else {
+                tri->GetPointIds()->SetId(0, centerId);
+                tri->GetPointIds()->SetId(1, p0);
+                tri->GetPointIds()->SetId(2, p1);
+            }
+            polys->InsertNextCell(tri);
+        }
+    };
+    addCap(true);
+    addCap(false);
+
+    auto poly = vtkSmartPointer<vtkPolyData>::New();
+    poly->SetPoints(points);
+    poly->SetPolys(polys);
+    return poly;
+}
+
 vtkSmartPointer<vtkPolyData> BuildHemisphereWorld(double radius, double height, int resolution, double z0,
                                                  const double start[3], const Basis& basis) {
     auto points = vtkSmartPointer<vtkPoints>::New();
@@ -234,6 +337,13 @@ vtkSmartPointer<vtkPolyData> BuildHemisphereWorld(double radius, double height, 
     return poly;
 }
 
+// 不再使用（改为直接生成带螺纹的颈部网格）
+vtkSmartPointer<vtkPolyData> BuildThreadWorld(double radius, double depth, double height, int turns, int resolution,
+                                             double z0, const double start[3], const Basis& basis) {
+    auto empty = vtkSmartPointer<vtkPolyData>::New();
+    return empty;
+}
+
 } // namespace
 
 bool ComponentCreator::BuildActor(double radius, int resolution) {
@@ -270,7 +380,9 @@ bool ComponentCreator::BuildActor(double radius, int resolution) {
 
     // 在世界坐标直接构建三段，轴向即 start->end
     auto base = BuildFrustumWorld(topRadius, radius, baseH, segments, pImpl->startPoint, basis);
-    auto neck = BuildCylinderWorld(radius, neckH, segments, baseH, pImpl->startPoint, basis);
+    auto neck = (pImpl->threadDepth > 0.0 && pImpl->threadTurns > 0)
+        ? BuildThreadedCylinderWorld(radius, pImpl->threadDepth, neckH, pImpl->threadTurns, segments, baseH, pImpl->startPoint, basis)
+        : BuildCylinderWorld(radius, neckH, segments, baseH, pImpl->startPoint, basis);
     auto head = BuildHemisphereWorld(radius, headH, segments, baseH + neckH, pImpl->startPoint, basis);
 
     auto append = vtkSmartPointer<vtkAppendPolyData>::New();

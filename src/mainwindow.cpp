@@ -160,12 +160,16 @@ void MainWindow::updateActorFromControls()
     double headH = toHeight(headHeightSlider);
     double baseTopR = toRadius(baseTopRadiusSlider);
     int resolution = resolutionSlider->value();
+    double threadDepth = toRadius(threadDepthSlider);
+    int threadTurns = threadTurnsSlider->value();
 
     componentCreator->SetBaseHeight(baseH);
     componentCreator->SetNeckHeight(neckH);
     componentCreator->SetHeadHeight(headH);
     componentCreator->SetBaseTopRadius(baseTopR);
     componentCreator->SetResolution(resolution);
+    componentCreator->SetThreadDepth(threadDepth);
+    componentCreator->SetThreadTurns(threadTurns);
 
     if(!componentCreator->BuildActor(toRadius(radiusSlider), resolution)) {
         statusBar()->showMessage("参数非法或长度不足，无法生成组件", 2000);
@@ -246,6 +250,8 @@ QWidget* MainWindow::buildControls()
         makeSliderRow(grp.second, "Head高度", 1, 300, 6, headHeightSlider, headHeightValueLabel);
         makeSliderRow(grp.second, "Base上底半径", 1, 300, 12, baseTopRadiusSlider, baseTopRadiusValueLabel); // 0.1~30.0
         makeSliderRow(grp.second, "分段(Resolution)", 8, 120, 32, resolutionSlider, resolutionValueLabel);
+        makeSliderRow(grp.second, "螺纹深度", 0, 100, 10, threadDepthSlider, threadDepthValueLabel); // 0~10.0
+        makeSliderRow(grp.second, "螺纹圈数", 0, 50, 5, threadTurnsSlider, threadTurnsValueLabel);
         layout->addWidget(grp.first);
     }
 
@@ -270,6 +276,8 @@ QWidget* MainWindow::buildControls()
     connectSlider(headHeightSlider);
     connectSlider(baseTopRadiusSlider);
     connectSlider(resolutionSlider);
+    connectSlider(threadDepthSlider);
+    connectSlider(threadTurnsSlider);
 
     return panel;
 }
@@ -306,6 +314,8 @@ void MainWindow::updateValueLabels()
     headHeightValueLabel->setText(QString::number(toHeight(headHeightSlider), 'f', 1));
     baseTopRadiusValueLabel->setText(QString::number(toRadius(baseTopRadiusSlider), 'f', 1));
     resolutionValueLabel->setText(QString::number(resolutionSlider->value()));
+    threadDepthValueLabel->setText(QString::number(toRadius(threadDepthSlider), 'f', 1));
+    threadTurnsValueLabel->setText(QString::number(threadTurnsSlider->value()));
 
     double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
     double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };

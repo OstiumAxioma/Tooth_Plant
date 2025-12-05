@@ -76,6 +76,8 @@ private:
     QSlider *headHeightSlider;
     QSlider *baseTopRadiusSlider;
     QSlider *resolutionSlider;
+    QSlider *threadDepthSlider;
+    QSlider *threadTurnsSlider;
     QLabel *startValueLabels[3];
     QLabel *endValueLabels[3];
     QLabel *radiusValueLabel;
@@ -84,6 +86,8 @@ private:
     QLabel *headHeightValueLabel;
     QLabel *baseTopRadiusValueLabel;
     QLabel *resolutionValueLabel;
+    QLabel *threadDepthValueLabel;
+    QLabel *threadTurnsValueLabel;
     QLabel *lengthInfoLabel;
 };
 

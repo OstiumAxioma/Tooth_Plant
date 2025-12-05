@@ -23,6 +23,8 @@ public:
     void SetHeadHeight(double height);
     void SetBaseTopRadius(double radius);
     void SetResolution(int resolution);
+    void SetThreadDepth(double depth);
+    void SetThreadTurns(int turns);
 
     // 生成Actor（基于当前起点/终点）
     bool BuildActor(double radius = 1.0, int resolution = 32);
