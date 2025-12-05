@@ -17,11 +17,11 @@ public:
     void SetStartPoint(double x, double y, double z);
     void SetEndPoint(double x, double y, double z);
 
-    // 尺寸配置
-    void SetBaseHeight(double height);
-    void SetNeckHeight(double height);
+    // 尺寸配置（neck=原base截锥，body=原neck圆柱）
+    void SetNeckHeight(double height);    // 截锥高度
+    void SetBodyHeight(double height);    // 圆柱高度
     void SetHeadHeight(double height);
-    void SetBaseTopRadius(double radius);
+    void SetBaseTopRadius(double radius); // Neck 上底半径
     void SetResolution(int resolution);
     void SetThreadDepth(double depth);
     void SetThreadTurns(int turns);

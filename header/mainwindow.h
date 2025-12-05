@@ -71,8 +71,8 @@ private:
     QSlider *startSliders[3];
     QSlider *endSliders[3];
     QSlider *radiusSlider;
-    QSlider *baseHeightSlider;
     QSlider *neckHeightSlider;
+    QSlider *bodyHeightSlider;
     QSlider *headHeightSlider;
     QSlider *baseTopRadiusSlider;
     QSlider *resolutionSlider;
@@ -81,8 +81,8 @@ private:
     QLabel *startValueLabels[3];
     QLabel *endValueLabels[3];
     QLabel *radiusValueLabel;
-    QLabel *baseHeightValueLabel;
     QLabel *neckHeightValueLabel;
+    QLabel *bodyHeightValueLabel;
     QLabel *headHeightValueLabel;
     QLabel *baseTopRadiusValueLabel;
     QLabel *resolutionValueLabel;
