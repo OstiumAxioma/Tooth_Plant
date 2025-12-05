@@ -197,14 +197,42 @@ vtkSmartPointer<vtkPolyData> BuildThreadedCylinderWorld(double radius, double de
     int resZ = std::max(resolution * turns * 2, turns * 16);
     double full = vtkMath::Pi() * 2.0;
     double pitch = height / static_cast<double>(turns);
+    double flatGap = 0.2;       // 两端纯平区长度
+    double fadeLen = 0.2;       // 渐变长度
+
+    // 若颈部太短，按比例缩放空隙/渐变，但保留对称结构
+    double needed = 2.0 * (flatGap + fadeLen);
+    if (needed >= height) {
+        double scale = height / needed;
+        flatGap *= scale;
+        fadeLen *= scale;
+    }
+
+    double fadeInStart = flatGap;
+    double fadeInEnd   = flatGap + fadeLen;
+    double fadeOutStart= height - (flatGap + fadeLen);
+    double fadeOutEnd  = height - flatGap;
 
     auto points = vtkSmartPointer<vtkPoints>::New();
     auto polys = vtkSmartPointer<vtkCellArray>::New();
 
     auto radiusAt = [&](double z, double theta) {
-        double phase = (z / pitch) - (theta / full);
+        double zLocal = z - z0;
+        if (zLocal < flatGap || zLocal > fadeOutEnd) {
+            return radius; // 纯平区
+        }
+
+        double phase = (zLocal / pitch) - (theta / full);
         double wave = std::sin(full * phase);
-        return radius + depth * wave; // 正负起伏，形成螺纹
+
+        double fade = 1.0;
+        if (zLocal < fadeInEnd) {
+            fade = std::clamp((zLocal - fadeInStart) / fadeLen, 0.0, 1.0);
+        } else if (zLocal > fadeOutStart) {
+            fade = std::clamp((fadeOutEnd - zLocal) / fadeLen, 0.0, 1.0);
+        }
+
+        return radius + depth * wave * fade; // 起伏并在端部渐隐
     };
 
     auto pointId = [&](int iz, int it) {
@@ -363,9 +391,9 @@ bool ComponentCreator::BuildActor(double radius, int resolution) {
     int segments = std::max(8, (pImpl->resolution > 3 ? pImpl->resolution : resolution));
 
     // 高度：如果未设置，给出固定默认值（不再依赖总长）
-    double baseH = pImpl->baseHeight > 0.0 ? pImpl->baseHeight : radius * 2.0;
-    double neckH = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : radius * 2.0;
-    double headH = pImpl->headHeight > 0.0 ? pImpl->headHeight : radius * 2.0;
+    double baseH = pImpl->baseHeight > 0.0 ? pImpl->baseHeight : 1.0;
+    double neckH = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : 2.0;
+    double headH = pImpl->headHeight > 0.0 ? pImpl->headHeight : 1.0;
 
     if (baseH <= 1e-6 || neckH <= 1e-6 || headH <= 1e-6) {
         return false;
@@ -379,9 +407,12 @@ bool ComponentCreator::BuildActor(double radius, int resolution) {
     Basis basis = MakeBasis(dir);
 
     // 在世界坐标直接构建三段，轴向即 start->end
+    double threadDepth = pImpl->threadDepth > 0.0 ? pImpl->threadDepth : 0.1;
+    int threadTurns = pImpl->threadTurns > 0 ? pImpl->threadTurns : 20;
+
     auto base = BuildFrustumWorld(topRadius, radius, baseH, segments, pImpl->startPoint, basis);
-    auto neck = (pImpl->threadDepth > 0.0 && pImpl->threadTurns > 0)
-        ? BuildThreadedCylinderWorld(radius, pImpl->threadDepth, neckH, pImpl->threadTurns, segments, baseH, pImpl->startPoint, basis)
+    auto neck = (threadDepth > 0.0 && threadTurns > 0)
+        ? BuildThreadedCylinderWorld(radius, threadDepth, neckH, threadTurns, segments, baseH, pImpl->startPoint, basis)
         : BuildCylinderWorld(radius, neckH, segments, baseH, pImpl->startPoint, basis);
     auto head = BuildHemisphereWorld(radius, headH, segments, baseH + neckH, pImpl->startPoint, basis);
 

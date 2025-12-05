@@ -245,13 +245,13 @@ QWidget* MainWindow::buildControls()
     // 尺寸高度
     {
         auto grp = makeGroup("几何尺寸 (单位对应坐标缩放 0.1)");
-        makeSliderRow(grp.second, "Base高度", 1, 300, 6, baseHeightSlider, baseHeightValueLabel);   // 0.1~30.0
-        makeSliderRow(grp.second, "Neck高度", 1, 300, 8, neckHeightSlider, neckHeightValueLabel);
-        makeSliderRow(grp.second, "Head高度", 1, 300, 6, headHeightSlider, headHeightValueLabel);
+        makeSliderRow(grp.second, "Base高度", 1, 300, 10, baseHeightSlider, baseHeightValueLabel);   // 默认1.0
+        makeSliderRow(grp.second, "Neck高度", 1, 300, 20, neckHeightSlider, neckHeightValueLabel);  // 默认2.0
+        makeSliderRow(grp.second, "Head高度", 1, 300, 10, headHeightSlider, headHeightValueLabel);  // 默认1.0
         makeSliderRow(grp.second, "Base上底半径", 1, 300, 12, baseTopRadiusSlider, baseTopRadiusValueLabel); // 0.1~30.0
         makeSliderRow(grp.second, "分段(Resolution)", 8, 120, 32, resolutionSlider, resolutionValueLabel);
-        makeSliderRow(grp.second, "螺纹深度", 0, 100, 10, threadDepthSlider, threadDepthValueLabel); // 0~10.0
-        makeSliderRow(grp.second, "螺纹圈数", 0, 50, 5, threadTurnsSlider, threadTurnsValueLabel);
+        makeSliderRow(grp.second, "螺纹深度", 0, 100, 1, threadDepthSlider, threadDepthValueLabel); // 默认0.1
+        makeSliderRow(grp.second, "螺纹圈数", 0, 50, 20, threadTurnsSlider, threadTurnsValueLabel); // 默认20
         layout->addWidget(grp.first);
     }
 
