@@ -49,6 +49,7 @@ private slots:
     QWidget* buildControls();
     QWidget* buildRenderArea();
     void updateActorFromControls();
+    double currentLength() const;
 
 private:
     // UI组件
@@ -70,9 +71,20 @@ private:
     QSlider *startSliders[3];
     QSlider *endSliders[3];
     QSlider *radiusSlider;
+    QSlider *baseHeightSlider;
+    QSlider *neckHeightSlider;
+    QSlider *headHeightSlider;
+    QSlider *baseTopRadiusSlider;
+    QSlider *resolutionSlider;
     QLabel *startValueLabels[3];
     QLabel *endValueLabels[3];
     QLabel *radiusValueLabel;
+    QLabel *baseHeightValueLabel;
+    QLabel *neckHeightValueLabel;
+    QLabel *headHeightValueLabel;
+    QLabel *baseTopRadiusValueLabel;
+    QLabel *resolutionValueLabel;
+    QLabel *lengthInfoLabel;
 };
 
 #endif // MAINWINDOW_H

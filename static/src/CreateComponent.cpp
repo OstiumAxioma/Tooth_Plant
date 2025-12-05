@@ -252,22 +252,10 @@ bool ComponentCreator::BuildActor(double radius, int resolution) {
 
     int segments = std::max(8, (pImpl->resolution > 3 ? pImpl->resolution : resolution));
 
-    // 高度解析：未指定的按比例默认，head 未指定时用剩余长度补齐；如用户三段和不等于总长则报错
-    double baseH = pImpl->baseHeight > 0.0 ? pImpl->baseHeight : length * 0.3;
-    double neckH = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : length * 0.4;
-    bool headSet = pImpl->headHeight > 0.0;
-    double headH = headSet ? pImpl->headHeight : (length - baseH - neckH);
-
-    if (headSet) {
-        double sum = baseH + neckH + headH;
-        if (std::abs(sum - length) > 1e-6) {
-            return false;
-        }
-    } else {
-        if (headH <= 1e-6) {
-            return false;
-        }
-    }
+    // 高度：如果未设置，给出固定默认值（不再依赖总长）
+    double baseH = pImpl->baseHeight > 0.0 ? pImpl->baseHeight : radius * 2.0;
+    double neckH = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : radius * 2.0;
+    double headH = pImpl->headHeight > 0.0 ? pImpl->headHeight : radius * 2.0;
 
     if (baseH <= 1e-6 || neckH <= 1e-6 || headH <= 1e-6) {
         return false;

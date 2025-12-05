@@ -14,6 +14,7 @@
 #include <QFormLayout>
 #include <QVBoxLayout>
 #include <QVTKOpenGLWidget.h>
+#include <cmath>
 
 // 包含静态库头文件
 #include "CreateComponent.h"
@@ -41,7 +42,6 @@ MainWindow::MainWindow(QWidget *parent)
     createToolBars();
     createStatusBar();
     
-    // 先创建一个简单的界面，确保程序能稳定运行
     setupSimpleWidget();
     
     // 延迟初始化VTK组件
@@ -147,20 +147,28 @@ void MainWindow::updateActorFromControls()
 
     auto toCoord = [](QSlider *s) { return s->value() / 10.0; };
     auto toRadius = [](QSlider *s) { return s->value() / 10.0; };
+    auto toHeight = toCoord;
 
-    componentCreator->SetStartPoint(
-        toCoord(startSliders[0]),
-        toCoord(startSliders[1]),
-        toCoord(startSliders[2])
-    );
-    componentCreator->SetEndPoint(
-        toCoord(endSliders[0]),
-        toCoord(endSliders[1]),
-        toCoord(endSliders[2])
-    );
+    double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
+    double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };
 
-    if(!componentCreator->BuildActor(toRadius(radiusSlider), 48)) {
-        statusBar()->showMessage("起点与终点重合，无法生成圆柱体", 2000);
+    componentCreator->SetStartPoint(start[0], start[1], start[2]);
+    componentCreator->SetEndPoint(end[0], end[1], end[2]);
+
+    double baseH = toHeight(baseHeightSlider);
+    double neckH = toHeight(neckHeightSlider);
+    double headH = toHeight(headHeightSlider);
+    double baseTopR = toRadius(baseTopRadiusSlider);
+    int resolution = resolutionSlider->value();
+
+    componentCreator->SetBaseHeight(baseH);
+    componentCreator->SetNeckHeight(neckH);
+    componentCreator->SetHeadHeight(headH);
+    componentCreator->SetBaseTopRadius(baseTopR);
+    componentCreator->SetResolution(resolution);
+
+    if(!componentCreator->BuildActor(toRadius(radiusSlider), resolution)) {
+        statusBar()->showMessage("参数非法或长度不足，无法生成组件", 2000);
         return;
     }
 
@@ -230,6 +238,22 @@ QWidget* MainWindow::buildControls()
         layout->addWidget(grp.first);
     }
 
+    // 尺寸高度
+    {
+        auto grp = makeGroup("几何尺寸 (单位对应坐标缩放 0.1)");
+        makeSliderRow(grp.second, "Base高度", 1, 300, 6, baseHeightSlider, baseHeightValueLabel);   // 0.1~30.0
+        makeSliderRow(grp.second, "Neck高度", 1, 300, 8, neckHeightSlider, neckHeightValueLabel);
+        makeSliderRow(grp.second, "Head高度", 1, 300, 6, headHeightSlider, headHeightValueLabel);
+        makeSliderRow(grp.second, "Base上底半径", 1, 300, 12, baseTopRadiusSlider, baseTopRadiusValueLabel); // 0.1~30.0
+        makeSliderRow(grp.second, "分段(Resolution)", 8, 120, 32, resolutionSlider, resolutionValueLabel);
+        layout->addWidget(grp.first);
+    }
+
+    // 长度提示
+    lengthInfoLabel = new QLabel(panel);
+    lengthInfoLabel->setStyleSheet("color: #555;");
+    layout->addWidget(lengthInfoLabel);
+
     layout->addStretch(1);
     updateValueLabels();
 
@@ -241,6 +265,11 @@ QWidget* MainWindow::buildControls()
     connectSlider(startSliders[0]); connectSlider(startSliders[1]); connectSlider(startSliders[2]);
     connectSlider(endSliders[0]);   connectSlider(endSliders[1]);   connectSlider(endSliders[2]);
     connectSlider(radiusSlider);
+    connectSlider(baseHeightSlider);
+    connectSlider(neckHeightSlider);
+    connectSlider(headHeightSlider);
+    connectSlider(baseTopRadiusSlider);
+    connectSlider(resolutionSlider);
 
     return panel;
 }
@@ -261,6 +290,7 @@ void MainWindow::updateValueLabels()
 {
     auto toCoord = [](QSlider *s) { return s->value() / 10.0; };
     auto toRadius = [](QSlider *s) { return s->value() / 10.0; };
+    auto toHeight = toCoord;
 
     startValueLabels[0]->setText(QString::number(toCoord(startSliders[0]), 'f', 1));
     startValueLabels[1]->setText(QString::number(toCoord(startSliders[1]), 'f', 1));
@@ -271,4 +301,27 @@ void MainWindow::updateValueLabels()
     endValueLabels[2]->setText(QString::number(toCoord(endSliders[2]), 'f', 1));
 
     radiusValueLabel->setText(QString::number(toRadius(radiusSlider), 'f', 1));
+    baseHeightValueLabel->setText(QString::number(toHeight(baseHeightSlider), 'f', 1));
+    neckHeightValueLabel->setText(QString::number(toHeight(neckHeightSlider), 'f', 1));
+    headHeightValueLabel->setText(QString::number(toHeight(headHeightSlider), 'f', 1));
+    baseTopRadiusValueLabel->setText(QString::number(toRadius(baseTopRadiusSlider), 'f', 1));
+    resolutionValueLabel->setText(QString::number(resolutionSlider->value()));
+
+    double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
+    double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };
+    double dx = end[0]-start[0], dy = end[1]-start[1], dz = end[2]-start[2];
+    double dirLen = std::sqrt(dx*dx + dy*dy + dz*dz);
+    double sumH = toHeight(baseHeightSlider) + toHeight(neckHeightSlider) + toHeight(headHeightSlider);
+    lengthInfoLabel->setText(QString("方向长度 %1 / 部件总长 %2")
+        .arg(dirLen, 0, 'f', 2)
+        .arg(sumH, 0, 'f', 2));
+}
+
+double MainWindow::currentLength() const
+{
+    auto toCoord = [](QSlider *s) { return s->value() / 10.0; };
+    double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
+    double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };
+    double dx = end[0]-start[0], dy = end[1]-start[1], dz = end[2]-start[2];
+    return std::sqrt(dx*dx + dy*dy + dz*dz);
 }
