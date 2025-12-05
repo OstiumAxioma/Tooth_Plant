@@ -197,10 +197,10 @@ vtkSmartPointer<vtkPolyData> BuildThreadedCylinderWorld(double radius, double de
     int resZ = std::max(resolution * turns * 2, turns * 16);
     double full = vtkMath::Pi() * 2.0;
     double pitch = height / static_cast<double>(turns);
-    double flatGap = 0.2;       // 两端纯平区长度
-    double fadeLen = 0.2;       // 渐变长度
+    double flatGap = 0.5;       // 两端纯平区长度（固定长度，对称）
+    double fadeLen = 0.25;      // 渐变长度（固定长度，对称）
 
-    // 若颈部太短，按比例缩放空隙/渐变，但保留对称结构
+    // 若颈部太短，按比例缩放空隙/渐变，但保持两端对称
     double needed = 2.0 * (flatGap + fadeLen);
     if (needed >= height) {
         double scale = height / needed;
@@ -216,8 +216,7 @@ vtkSmartPointer<vtkPolyData> BuildThreadedCylinderWorld(double radius, double de
     auto points = vtkSmartPointer<vtkPoints>::New();
     auto polys = vtkSmartPointer<vtkCellArray>::New();
 
-    auto radiusAt = [&](double z, double theta) {
-        double zLocal = z - z0;
+    auto radiusAt = [&](double zLocal, double theta) {
         if (zLocal < flatGap || zLocal > fadeOutEnd) {
             return radius; // 纯平区
         }
