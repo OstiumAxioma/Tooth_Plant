@@ -1,16 +1,20 @@
 #include "CreateComponent.h"
 
-// VTK 头文件
+#include <algorithm>
+#include <cmath>
+
 #include <vtkActor.h>
+#include <vtkAppendPolyData.h>
+#include <vtkCellArray.h>
+#include <vtkCleanPolyData.h>
 #include <vtkCylinderSource.h>
 #include <vtkMath.h>
-#include <vtkTransform.h>
-#include <vtkTransformPolyDataFilter.h>
+#include <vtkPoints.h>
+#include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
-#include <vtkRenderWindow.h>
-#include <vtkRenderWindowInteractor.h>
-#include <vtkRenderer.h>
 #include <vtkSmartPointer.h>
+#include <vtkSphereSource.h>
+#include <vtkTriangle.h>
 
 namespace CreateComponent {
 
@@ -18,9 +22,14 @@ class ComponentCreator::Impl {
 public:
     double startPoint[3]{0.0, 0.0, 0.0};
     double endPoint[3]{0.0, 0.0, 1.0};
+    double baseHeight{-1.0};
+    double neckHeight{-1.0};
+    double headHeight{-1.0};
+    double baseTopRadius{-1.0};
+    int resolution{32};
+
     vtkSmartPointer<vtkActor> actor;
     vtkSmartPointer<vtkPolyDataMapper> mapper;
-    vtkSmartPointer<vtkCylinderSource> cylinderSource;
 };
 
 ComponentCreator::ComponentCreator() : pImpl(std::make_unique<Impl>()) {}
@@ -38,6 +47,195 @@ void ComponentCreator::SetEndPoint(double x, double y, double z) {
     pImpl->endPoint[2] = z;
 }
 
+void ComponentCreator::SetBaseHeight(double height) { pImpl->baseHeight = height; }
+void ComponentCreator::SetNeckHeight(double height) { pImpl->neckHeight = height; }
+void ComponentCreator::SetHeadHeight(double height) { pImpl->headHeight = height; }
+void ComponentCreator::SetBaseTopRadius(double radius) { pImpl->baseTopRadius = radius; }
+void ComponentCreator::SetResolution(int resolution) { pImpl->resolution = resolution; }
+
+namespace {
+
+struct Basis {
+    double n[3]; // 轴向（start->end）
+    double u[3]; // 与 n 垂直的单位向量
+    double v[3]; // u×n
+};
+
+Basis MakeBasis(const double dir[3]) {
+    Basis b{};
+    b.n[0] = dir[0]; b.n[1] = dir[1]; b.n[2] = dir[2];
+    double tmp[3] = { std::abs(b.n[0]) < 0.9 ? 1.0 : 0.0, std::abs(b.n[0]) < 0.9 ? 0.0 : 1.0, 0.0 };
+    vtkMath::Cross(b.n, tmp, b.v);
+    vtkMath::Normalize(b.v);
+    vtkMath::Cross(b.v, b.n, b.u);
+    return b;
+}
+
+// 沿 start->end 轴直接生成截锥（start 为顶，上大下小）
+vtkSmartPointer<vtkPolyData> BuildFrustumWorld(double topRadius, double bottomRadius, double height, int resolution,
+                                              const double start[3], const Basis& basis) {
+    auto points = vtkSmartPointer<vtkPoints>::New();
+    auto polys = vtkSmartPointer<vtkCellArray>::New();
+    const double full = vtkMath::Pi() * 2.0;
+
+    auto addPoint = [&](double r, double z, double angle) {
+        double c = std::cos(angle), s = std::sin(angle);
+        double x = start[0] + basis.n[0] * z + basis.u[0] * r * c + basis.v[0] * r * s;
+        double y = start[1] + basis.n[1] * z + basis.u[1] * r * c + basis.v[1] * r * s;
+        double zc = start[2] + basis.n[2] * z + basis.u[2] * r * c + basis.v[2] * r * s;
+        points->InsertNextPoint(x, y, zc);
+    };
+
+    for (int i = 0; i < resolution; ++i) {
+        double angle = full * i / resolution;
+        addPoint(topRadius, 0.0, angle);
+        addPoint(bottomRadius, height, angle);
+    }
+
+    vtkIdType topCenterId = points->InsertNextPoint(start);
+    double bottomCenter[3] = { start[0] + basis.n[0] * height,
+                               start[1] + basis.n[1] * height,
+                               start[2] + basis.n[2] * height };
+    vtkIdType bottomCenterId = points->InsertNextPoint(bottomCenter);
+
+    auto addTri = [&](vtkIdType a, vtkIdType b, vtkIdType c) {
+        auto tri = vtkSmartPointer<vtkTriangle>::New();
+        tri->GetPointIds()->SetId(0, a);
+        tri->GetPointIds()->SetId(1, b);
+        tri->GetPointIds()->SetId(2, c);
+        polys->InsertNextCell(tri);
+    };
+
+    for (int i = 0; i < resolution; ++i) {
+        vtkIdType t0 = 2 * i;
+        vtkIdType b0 = t0 + 1;
+        vtkIdType t1 = 2 * ((i + 1) % resolution);
+        vtkIdType b1 = t1 + 1;
+
+        addTri(t0, t1, b1);
+        addTri(t0, b1, b0);
+        addTri(topCenterId, t0, t1);
+        addTri(bottomCenterId, b1, b0);
+    }
+
+    auto poly = vtkSmartPointer<vtkPolyData>::New();
+    poly->SetPoints(points);
+    poly->SetPolys(polys);
+    return poly;
+}
+
+// 沿轴向生成圆柱（顶面在 z0，底面在 z0+height）
+vtkSmartPointer<vtkPolyData> BuildCylinderWorld(double radius, double height, int resolution, double z0,
+                                                const double start[3], const Basis& basis) {
+    auto points = vtkSmartPointer<vtkPoints>::New();
+    auto polys = vtkSmartPointer<vtkCellArray>::New();
+    const double full = vtkMath::Pi() * 2.0;
+
+    auto addPoint = [&](double r, double z, double angle) {
+        double c = std::cos(angle), s = std::sin(angle);
+        double x = start[0] + basis.n[0] * z + basis.u[0] * r * c + basis.v[0] * r * s;
+        double y = start[1] + basis.n[1] * z + basis.u[1] * r * c + basis.v[1] * r * s;
+        double zc = start[2] + basis.n[2] * z + basis.u[2] * r * c + basis.v[2] * r * s;
+        points->InsertNextPoint(x, y, zc);
+    };
+
+    for (int i = 0; i < resolution; ++i) {
+        double angle = full * i / resolution;
+        addPoint(radius, z0, angle);
+        addPoint(radius, z0 + height, angle);
+    }
+
+    double topCenter[3] = { start[0] + basis.n[0] * z0,
+                            start[1] + basis.n[1] * z0,
+                            start[2] + basis.n[2] * z0 };
+    double bottomCenter[3] = { start[0] + basis.n[0] * (z0 + height),
+                               start[1] + basis.n[1] * (z0 + height),
+                               start[2] + basis.n[2] * (z0 + height) };
+    vtkIdType topCenterId = points->InsertNextPoint(topCenter);
+    vtkIdType bottomCenterId = points->InsertNextPoint(bottomCenter);
+
+    auto addTri = [&](vtkIdType a, vtkIdType b, vtkIdType c) {
+        auto tri = vtkSmartPointer<vtkTriangle>::New();
+        tri->GetPointIds()->SetId(0, a);
+        tri->GetPointIds()->SetId(1, b);
+        tri->GetPointIds()->SetId(2, c);
+        polys->InsertNextCell(tri);
+    };
+
+    for (int i = 0; i < resolution; ++i) {
+        vtkIdType t0 = 2 * i;
+        vtkIdType b0 = t0 + 1;
+        vtkIdType t1 = 2 * ((i + 1) % resolution);
+        vtkIdType b1 = t1 + 1;
+
+        addTri(t0, t1, b1);
+        addTri(t0, b1, b0);
+        addTri(topCenterId, t0, t1);
+        addTri(bottomCenterId, b1, b0);
+    }
+
+    auto poly = vtkSmartPointer<vtkPolyData>::New();
+    poly->SetPoints(points);
+    poly->SetPolys(polys);
+    return poly;
+}
+
+vtkSmartPointer<vtkPolyData> BuildHemisphereWorld(double radius, double height, int resolution, double z0,
+                                                 const double start[3], const Basis& basis) {
+    auto points = vtkSmartPointer<vtkPoints>::New();
+    auto polys = vtkSmartPointer<vtkCellArray>::New();
+    const double full = vtkMath::Pi() * 2.0;
+
+    int thetaRes = std::max(12, resolution * 2);
+    int phiRes = std::max(8, resolution);
+
+    for (int ip = 0; ip <= phiRes; ++ip) {
+        double phi = (vtkMath::Pi() * 0.5) * ip / phiRes; // 0..pi/2
+        double rxy = radius * std::cos(phi);
+        double zlocal = height * std::sin(phi); // 压缩后高度
+        for (int it = 0; it < thetaRes; ++it) {
+            double theta = full * it / thetaRes;
+            double c = std::cos(theta), s = std::sin(theta);
+            double x = start[0] + basis.n[0] * (z0 + zlocal) + basis.u[0] * rxy * c + basis.v[0] * rxy * s;
+            double y = start[1] + basis.n[1] * (z0 + zlocal) + basis.u[1] * rxy * c + basis.v[1] * rxy * s;
+            double z = start[2] + basis.n[2] * (z0 + zlocal) + basis.u[2] * rxy * c + basis.v[2] * rxy * s;
+            points->InsertNextPoint(x, y, z);
+        }
+    }
+
+    auto addCell = [&](vtkIdType a, vtkIdType b, vtkIdType c) {
+        auto tri = vtkSmartPointer<vtkTriangle>::New();
+        tri->GetPointIds()->SetId(0, a);
+        tri->GetPointIds()->SetId(1, b);
+        tri->GetPointIds()->SetId(2, c);
+        polys->InsertNextCell(tri);
+    };
+
+    auto idx = [&](int ip, int it) {
+        int thetaResLocal = thetaRes;
+        it = it % thetaResLocal;
+        return static_cast<vtkIdType>(ip * thetaResLocal + it);
+    };
+
+    for (int ip = 0; ip < phiRes; ++ip) {
+        for (int it = 0; it < thetaRes; ++it) {
+            vtkIdType p00 = idx(ip, it);
+            vtkIdType p01 = idx(ip, it + 1);
+            vtkIdType p10 = idx(ip + 1, it);
+            vtkIdType p11 = idx(ip + 1, it + 1);
+            addCell(p00, p01, p11);
+            addCell(p00, p11, p10);
+        }
+    }
+
+    auto poly = vtkSmartPointer<vtkPolyData>::New();
+    poly->SetPoints(points);
+    poly->SetPolys(polys);
+    return poly;
+}
+
+} // namespace
+
 bool ComponentCreator::BuildActor(double radius, int resolution) {
     double dir[3] = {
         pImpl->endPoint[0] - pImpl->startPoint[0],
@@ -46,54 +244,59 @@ bool ComponentCreator::BuildActor(double radius, int resolution) {
     };
 
     double length = vtkMath::Norm(dir);
-    if (length <= 1e-6) {
-        return false; // 起点和终点重合，无法生成
+    if (length <= 1e-6 || radius <= 1e-6) {
+        return false;
     }
 
     vtkMath::Normalize(dir);
 
-    // Cylinder along Z axis, height = length
-    pImpl->cylinderSource = vtkSmartPointer<vtkCylinderSource>::New();
-    pImpl->cylinderSource->SetRadius(radius);
-    pImpl->cylinderSource->SetHeight(length);
-    pImpl->cylinderSource->SetResolution(resolution);
-    pImpl->cylinderSource->SetCenter(0.0, 0.0, 0.0);
-    pImpl->cylinderSource->SetCapping(1);
-    pImpl->cylinderSource->Update();
+    int segments = std::max(8, (pImpl->resolution > 3 ? pImpl->resolution : resolution));
 
-    // 计算从Z轴到目标方向的旋转
-    double zAxis[3] = {0.0, 0.0, 1.0};
-    double rotationAxis[3];
-    vtkMath::Cross(zAxis, dir, rotationAxis);
-    double axisNorm = vtkMath::Norm(rotationAxis);
+    // 高度解析：未指定的按比例默认，head 未指定时用剩余长度补齐；如用户三段和不等于总长则报错
+    double baseH = pImpl->baseHeight > 0.0 ? pImpl->baseHeight : length * 0.3;
+    double neckH = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : length * 0.4;
+    bool headSet = pImpl->headHeight > 0.0;
+    double headH = headSet ? pImpl->headHeight : (length - baseH - neckH);
 
-    double angleDeg = vtkMath::DegreesFromRadians(std::acos(vtkMath::Dot(zAxis, dir)));
-    vtkSmartPointer<vtkTransform> transform = vtkSmartPointer<vtkTransform>::New();
-    transform->Identity();
-
-    if (axisNorm > 1e-6) {
-        vtkMath::Normalize(rotationAxis);
-        transform->RotateWXYZ(angleDeg, rotationAxis);
-    } else if (angleDeg > 179.9) {
-        // 反向时选择任意正交轴旋转180度
-        transform->RotateWXYZ(180.0, 1.0, 0.0, 0.0);
+    if (headSet) {
+        double sum = baseH + neckH + headH;
+        if (std::abs(sum - length) > 1e-6) {
+            return false;
+        }
+    } else {
+        if (headH <= 1e-6) {
+            return false;
+        }
     }
 
-    // 平移到中心点
-    double midPoint[3] = {
-        (pImpl->startPoint[0] + pImpl->endPoint[0]) * 0.5,
-        (pImpl->startPoint[1] + pImpl->endPoint[1]) * 0.5,
-        (pImpl->startPoint[2] + pImpl->endPoint[2]) * 0.5
-    };
-    transform->Translate(midPoint);
+    if (baseH <= 1e-6 || neckH <= 1e-6 || headH <= 1e-6) {
+        return false;
+    }
 
-    auto transformFilter = vtkSmartPointer<vtkTransformPolyDataFilter>::New();
-    transformFilter->SetInputConnection(pImpl->cylinderSource->GetOutputPort());
-    transformFilter->SetTransform(transform);
-    transformFilter->Update();
+    double topRadius = pImpl->baseTopRadius > radius ? pImpl->baseTopRadius : radius * 1.1;
+    if (topRadius <= radius) {
+        topRadius = radius * 1.05;
+    }
+
+    Basis basis = MakeBasis(dir);
+
+    // 在世界坐标直接构建三段，轴向即 start->end
+    auto base = BuildFrustumWorld(topRadius, radius, baseH, segments, pImpl->startPoint, basis);
+    auto neck = BuildCylinderWorld(radius, neckH, segments, baseH, pImpl->startPoint, basis);
+    auto head = BuildHemisphereWorld(radius, headH, segments, baseH + neckH, pImpl->startPoint, basis);
+
+    auto append = vtkSmartPointer<vtkAppendPolyData>::New();
+    append->AddInputData(base);
+    append->AddInputData(neck);
+    append->AddInputData(head);
+    append->Update();
+
+    auto clean = vtkSmartPointer<vtkCleanPolyData>::New();
+    clean->SetInputConnection(append->GetOutputPort());
+    clean->Update();
 
     pImpl->mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
-    pImpl->mapper->SetInputConnection(transformFilter->GetOutputPort());
+    pImpl->mapper->SetInputConnection(clean->GetOutputPort());
 
     pImpl->actor = vtkSmartPointer<vtkActor>::New();
     pImpl->actor->SetMapper(pImpl->mapper);
@@ -101,8 +304,6 @@ bool ComponentCreator::BuildActor(double radius, int resolution) {
     return true;
 }
 
-vtkActor* ComponentCreator::GetActor() const {
-    return pImpl->actor;
-}
+vtkActor* ComponentCreator::GetActor() const { return pImpl->actor; }
 
 } // namespace CreateComponent

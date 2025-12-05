@@ -5,8 +5,6 @@
 
 // 前向声明VTK类，避免在头文件中包含VTK头文件
 class vtkActor;
-class vtkPolyDataMapper;
-class vtkCylinderSource;
 
 namespace CreateComponent {
 
@@ -15,9 +13,16 @@ public:
     ComponentCreator();
     ~ComponentCreator();
 
-    // 设置圆柱起点/终点
+    // 设置组件起点/终点
     void SetStartPoint(double x, double y, double z);
     void SetEndPoint(double x, double y, double z);
+
+    // 尺寸配置
+    void SetBaseHeight(double height);
+    void SetNeckHeight(double height);
+    void SetHeadHeight(double height);
+    void SetBaseTopRadius(double radius);
+    void SetResolution(int resolution);
 
     // 生成Actor（基于当前起点/终点）
     bool BuildActor(double radius = 1.0, int resolution = 32);
