@@ -103,6 +103,8 @@ set(SOURCES
 # 头文件
 set(HEADERS
     header/mainwindow.h
+    header/CustomizeImplant.h
+    header/data-define/DataDefine.h
 )
 
 # UI文件
@@ -114,10 +116,9 @@ set(FORMS
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${FORMS})
 
 # 添加包含目录
-target_include_directories(${PROJECT_NAME} PRIVATE 
+target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/header
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/static/header  # 添加静态库头文件目录
 )
 
 # 设置编译定义
@@ -134,29 +135,28 @@ if(MSVC)
 endif()
 
 # 查找静态库文件
-find_library(CREATE_COMPONENT_LIB_RELEASE 
-    NAMES CreateComponent
+find_library(CUSTOMIZE_IMPLANT_LIB_RELEASE
+    NAMES CustomizeImplant
     PATHS
         ${CMAKE_CURRENT_SOURCE_DIR}/lib
         ${CMAKE_CURRENT_SOURCE_DIR}/static/build/lib/Release
     NO_DEFAULT_PATH
 )
 
-find_library(CREATE_COMPONENT_LIB_DEBUG
-    NAMES CreateComponent_d CreateComponent
+find_library(CUSTOMIZE_IMPLANT_LIB_DEBUG
+    NAMES CustomizeImplant_d CustomizeImplant
     PATHS
         ${CMAKE_CURRENT_SOURCE_DIR}/lib
         ${CMAKE_CURRENT_SOURCE_DIR}/static/build/lib/Debug
     NO_DEFAULT_PATH
 )
 
-# 检查是否找到静态库
-if(NOT CREATE_COMPONENT_LIB_RELEASE)
-    message(WARNING "CreateComponent.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib or static/build/lib/Release")
+if(NOT CUSTOMIZE_IMPLANT_LIB_RELEASE)
+    message(WARNING "CustomizeImplant.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib or static/build/lib/Release")
 endif()
 
-if(NOT CREATE_COMPONENT_LIB_DEBUG)
-    message(WARNING "CreateComponent_d.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib or static/build/lib/Debug")
+if(NOT CUSTOMIZE_IMPLANT_LIB_DEBUG)
+    message(WARNING "CustomizeImplant_d.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib or static/build/lib/Debug")
 endif()
 
 # 链接库
@@ -167,14 +167,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${VTK_LIBRARIES}
 )
 
-# 根据配置链接对应的静态库
-if(CREATE_COMPONENT_LIB_RELEASE OR CREATE_COMPONENT_LIB_DEBUG)
+if(CUSTOMIZE_IMPLANT_LIB_RELEASE OR CUSTOMIZE_IMPLANT_LIB_DEBUG)
     target_link_libraries(${PROJECT_NAME} PRIVATE
-        $<$<CONFIG:Debug>:${CREATE_COMPONENT_LIB_DEBUG}>
-        $<$<CONFIG:Release>:${CREATE_COMPONENT_LIB_RELEASE}>
+        $<$<CONFIG:Debug>:${CUSTOMIZE_IMPLANT_LIB_DEBUG}>
+        $<$<CONFIG:Release>:${CUSTOMIZE_IMPLANT_LIB_RELEASE}>
     )
 else()
-    message(FATAL_ERROR "Static library CreateComponent not found! Please build static library (cd static && build.bat) or copy libs into lib/.")
+    message(FATAL_ERROR "Static library CustomizeImplant not found! Please build the static project first.")
 endif()
 
 # 部署Qt DLL
@@ -183,7 +182,7 @@ if(WIN32)
     get_target_property(_qmake_executable Qt5::qmake IMPORTED_LOCATION)
     get_filename_component(_qt_bin_dir "${_qmake_executable}" DIRECTORY)
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${_qt_bin_dir}")
-    
+
     # 添加命令在构建后运行windeployqt
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND "${WINDEPLOYQT_EXECUTABLE}"

@@ -5,6 +5,8 @@
 #include <QToolBar>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QDir>
+#include <QFileInfo>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTimer>
@@ -16,14 +18,47 @@
 #include <QVTKOpenGLWidget.h>
 #include <cmath>
 
-// 包含静态库头文件
-#include "CreateComponent.h"
+// 包含静态库测试侧声明
+#include "CustomizeImplant.h"
 
 // VTK头文件
 #include <vtkRenderWindow.h>
 #include <vtkRenderer.h>
 #include <vtkSmartPointer.h>
 #include <vtkActor.h>
+
+namespace {
+
+QString projectRootPath()
+{
+    QDir dir(QCoreApplication::applicationDirPath());
+    for (int i = 0; i < 4; ++i) {
+        if (QFileInfo(dir.filePath("CMakeLists.txt")).exists()) {
+            return dir.absolutePath();
+        }
+        if (!dir.cdUp()) {
+            break;
+        }
+    }
+    return QCoreApplication::applicationDirPath();
+}
+
+QString stlOutputPath()
+{
+    return QDir(projectRootPath()).filePath("customize_implant_preview.stl");
+}
+
+DataDefine::ImplantInfoStu defaultImplantInfo()
+{
+    DataDefine::ImplantInfoStu info;
+    info.diameter = 1.6;
+    info.length = 4.0;
+    info.matchingDiameter = 2.4;
+    info.stlPath = stlOutputPath().toStdString();
+    return info;
+}
+
+} // namespace
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -32,7 +67,7 @@ MainWindow::MainWindow(QWidget *parent)
     , renderLayout(nullptr)
     , renderPlaceholder(nullptr)
     , renderer(nullptr)
-    , componentCreator(std::make_unique<CreateComponent::ComponentCreator>())
+    , componentCreator(std::make_unique<ComponentCreator>(defaultImplantInfo()))
 {
     setWindowTitle("VTK Qt 项目");
     resize(800, 600);
@@ -104,7 +139,9 @@ void MainWindow::setupSimpleWidget()
     mainLayout->addWidget(renderContainer, 1);
 
     setCentralWidget(central);
-    statusBar()->showMessage("控制面板已就绪，等待VTK初始化", 2000);
+    statusBar()->showMessage(
+        QString("控制面板已就绪，STL将输出到 %1").arg(QDir::toNativeSeparators(stlOutputPath())),
+        3000);
 }
 
 void MainWindow::setupVTKWidget()
@@ -146,42 +183,44 @@ void MainWindow::updateActorFromControls()
     }
 
     auto toCoord = [](QSlider *s) { return s->value() / 10.0; };
-    auto toRadius = [](QSlider *s) { return s->value() / 10.0; };
+    auto toSize = [](QSlider *s) { return s->value() / 10.0; };
     auto toHeight = toCoord;
 
     double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
     double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };
 
-    componentCreator->SetStartPoint(start[0], start[1], start[2]);
-    componentCreator->SetEndPoint(end[0], end[1], end[2]);
+    componentCreator->setStartPoint(start[0], start[1], start[2]);
+    componentCreator->setEndPoint(end[0], end[1], end[2]);
 
     double neckH = toHeight(neckHeightSlider);
     double bodyH = toHeight(bodyHeightSlider);
     double headH = toHeight(headHeightSlider);
-    double baseTopR = toRadius(baseTopRadiusSlider);
+    double totalDiameter = toSize(radiusSlider);
+    double baseTopDiameter = toSize(baseTopRadiusSlider);
     int resolution = resolutionSlider->value();
-    double threadDepth = toRadius(threadDepthSlider);
+    double threadDepth = toSize(threadDepthSlider);
     int threadTurns = threadTurnsSlider->value();
 
-    componentCreator->SetNeckHeight(neckH);
-    componentCreator->SetBodyHeight(bodyH);
-    componentCreator->SetHeadHeight(headH);
-    componentCreator->SetBaseTopRadius(baseTopR);
-    componentCreator->SetResolution(resolution);
-    componentCreator->SetThreadDepth(threadDepth);
-    componentCreator->SetThreadTurns(threadTurns);
+    componentCreator->setNeckHeight(neckH);
+    componentCreator->setBodyHeight(bodyH);
+    componentCreator->setHeadHeight(headH);
+    componentCreator->setBaseTopDiameter(baseTopDiameter);
+    componentCreator->setResolution(resolution);
+    componentCreator->setThreadDepth(threadDepth);
+    componentCreator->setThreadTurns(threadTurns);
+    componentCreator->setTotalDiameter(totalDiameter);
 
-    if(!componentCreator->BuildActor(toRadius(radiusSlider), resolution)) {
-        statusBar()->showMessage("参数非法或长度不足，无法生成组件", 2000);
+    if(!componentCreator->buildActor(resolution)) {
+        statusBar()->showMessage("参数非法，无法生成植体", 2000);
         return;
     }
 
-    if (vtkActor* actor = componentCreator->GetActor()) {
+    if (vtkActor* actor = componentCreator->getActor()) {
         renderer->RemoveAllViewProps();
         renderer->AddActor(actor);
         renderer->ResetCamera();
         vtkWidget->GetRenderWindow()->Render();
-        statusBar()->showMessage("圆柱体已更新", 1000);
+        statusBar()->showMessage("植体模型已更新", 1000);
     } else {
         statusBar()->showMessage("未生成有效的Actor", 2000);
     }
@@ -235,10 +274,10 @@ QWidget* MainWindow::buildControls()
         layout->addWidget(grp.first);
     }
 
-    // 半径
+    // 总直径
     {
-        auto grp = makeGroup("圆柱半径");
-        makeSliderRow(grp.second, "R", 1, 100, 8, radiusSlider, radiusValueLabel); // 0.1~10.0
+        auto grp = makeGroup("植体总直径");
+        makeSliderRow(grp.second, "D", 1, 100, 16, radiusSlider, radiusValueLabel); // 0.1~10.0
         layout->addWidget(grp.first);
     }
 
@@ -248,7 +287,7 @@ QWidget* MainWindow::buildControls()
         makeSliderRow(grp.second, "Neck高度", 1, 300, 10, neckHeightSlider, neckHeightValueLabel);   // 截锥，默认1.0
         makeSliderRow(grp.second, "Body高度", 1, 300, 20, bodyHeightSlider, bodyHeightValueLabel);  // 圆柱，默认2.0
         makeSliderRow(grp.second, "Head高度", 1, 300, 10, headHeightSlider, headHeightValueLabel);  // 默认1.0
-        makeSliderRow(grp.second, "Neck上底半径", 1, 300, 12, baseTopRadiusSlider, baseTopRadiusValueLabel); // 0.1~30.0
+        makeSliderRow(grp.second, "Neck上底直径", 1, 300, 24, baseTopRadiusSlider, baseTopRadiusValueLabel); // 0.1~30.0
         makeSliderRow(grp.second, "分段(Resolution)", 8, 120, 32, resolutionSlider, resolutionValueLabel);
         makeSliderRow(grp.second, "螺纹深度", 0, 100, 1, threadDepthSlider, threadDepthValueLabel); // 默认0.1
         makeSliderRow(grp.second, "螺纹圈数", 0, 50, 20, threadTurnsSlider, threadTurnsValueLabel); // 默认20
@@ -297,7 +336,7 @@ QWidget* MainWindow::buildRenderArea()
 void MainWindow::updateValueLabels()
 {
     auto toCoord = [](QSlider *s) { return s->value() / 10.0; };
-    auto toRadius = [](QSlider *s) { return s->value() / 10.0; };
+    auto toSize = [](QSlider *s) { return s->value() / 10.0; };
     auto toHeight = toCoord;
 
     startValueLabels[0]->setText(QString::number(toCoord(startSliders[0]), 'f', 1));
@@ -308,13 +347,13 @@ void MainWindow::updateValueLabels()
     endValueLabels[1]->setText(QString::number(toCoord(endSliders[1]), 'f', 1));
     endValueLabels[2]->setText(QString::number(toCoord(endSliders[2]), 'f', 1));
 
-    radiusValueLabel->setText(QString::number(toRadius(radiusSlider), 'f', 1));
+    radiusValueLabel->setText(QString::number(toSize(radiusSlider), 'f', 1));
     neckHeightValueLabel->setText(QString::number(toHeight(neckHeightSlider), 'f', 1));
     bodyHeightValueLabel->setText(QString::number(toHeight(bodyHeightSlider), 'f', 1));
     headHeightValueLabel->setText(QString::number(toHeight(headHeightSlider), 'f', 1));
-    baseTopRadiusValueLabel->setText(QString::number(toRadius(baseTopRadiusSlider), 'f', 1));
+    baseTopRadiusValueLabel->setText(QString::number(toSize(baseTopRadiusSlider), 'f', 1));
     resolutionValueLabel->setText(QString::number(resolutionSlider->value()));
-    threadDepthValueLabel->setText(QString::number(toRadius(threadDepthSlider), 'f', 1));
+    threadDepthValueLabel->setText(QString::number(toSize(threadDepthSlider), 'f', 1));
     threadTurnsValueLabel->setText(QString::number(threadTurnsSlider->value()));
 
     double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };

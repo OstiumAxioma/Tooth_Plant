@@ -2,7 +2,7 @@
 chcp 65001 > nul
 
 echo ========================================
-echo CreateComponent Static Library Build Script
+echo CustomizeImplant Static Library Build Script
 echo ========================================
 echo.
 
@@ -72,7 +72,7 @@ if exist bin rmdir /s /q bin 2>nul
 if exist lib rmdir /s /q lib 2>nul
 
 :: 清理Visual Studio和CMake的中间文件
-if exist CreateComponent.dir rmdir /s /q CreateComponent.dir 2>nul
+if exist CustomizeImplant.dir rmdir /s /q CustomizeImplant.dir 2>nul
 if exist *.exp del /q *.exp 2>nul
 if exist *.ilk del /q *.ilk 2>nul
 if exist *.pdb del /q *.pdb 2>nul
@@ -97,7 +97,7 @@ if not "%~2"=="" (
 )
 
 :: 配置项目
-echo Configuring CreateComponent project...
+echo Configuring CustomizeImplant project...
 echo Running: cmake .. %CMAKE_ARGS%
 cmake .. %CMAKE_ARGS%
 
@@ -162,29 +162,29 @@ echo Copying static library files to ..\lib...
 
 :: 复制Release版本（如果编译了）
 if %BUILD_RELEASE%==1 (
-    if exist "build\lib\Release\CreateComponent.lib" (
-        copy /Y "build\lib\Release\CreateComponent.lib" "..\lib\CreateComponent.lib" >nul
+    if exist "build\lib\Release\CustomizeImplant.lib" (
+        copy /Y "build\lib\Release\CustomizeImplant.lib" "..\lib\CustomizeImplant.lib" >nul
         if not errorlevel 1 (
-            echo  - CreateComponent.lib ^(Release^) copied successfully
+            echo  - CustomizeImplant.lib ^(Release^) copied successfully
         ) else (
-            echo  - ERROR: Failed to copy CreateComponent.lib
+            echo  - ERROR: Failed to copy CustomizeImplant.lib
         )
     ) else (
-        echo  - Warning: Release version of CreateComponent.lib not found at build\lib\Release\
+        echo  - Warning: Release version of CustomizeImplant.lib not found at build\lib\Release\
     )
 )
 
 :: 复制Debug版本（如果编译了）
 if %BUILD_DEBUG%==1 (
-    if exist "build\lib\Debug\CreateComponent.lib" (
-        copy /Y "build\lib\Debug\CreateComponent.lib" "..\lib\CreateComponent_d.lib" >nul
+    if exist "build\lib\Debug\CustomizeImplant.lib" (
+        copy /Y "build\lib\Debug\CustomizeImplant.lib" "..\lib\CustomizeImplant_d.lib" >nul
         if not errorlevel 1 (
-            echo  - CreateComponent_d.lib ^(Debug^) copied successfully
+            echo  - CustomizeImplant_d.lib ^(Debug^) copied successfully
         ) else (
-            echo  - ERROR: Failed to copy CreateComponent_d.lib
+            echo  - ERROR: Failed to copy CustomizeImplant_d.lib
         )
     ) else (
-        echo  - Warning: Debug version of CreateComponent.lib not found at build\lib\Debug\
+        echo  - Warning: Debug version of CustomizeImplant.lib not found at build\lib\Debug\
     )
 )
 
@@ -198,15 +198,15 @@ if not exist "..\header" (
 :: 复制头文件到根目录的header文件夹
 echo.
 echo Copying header files to ..\header...
-if exist "header\CreateComponent.h" (
-    copy /Y "header\CreateComponent.h" "..\header\CreateComponent.h" >nul
+if exist "header\CustomizeImplant.h" (
+    copy /Y "header\CustomizeImplant.h" "..\header\CustomizeImplant.h" >nul
     if not errorlevel 1 (
-        echo  - CreateComponent.h copied successfully
+        echo  - CustomizeImplant.h copied successfully
     ) else (
-        echo  - ERROR: Failed to copy CreateComponent.h
+        echo  - ERROR: Failed to copy CustomizeImplant.h
     )
 ) else (
-    echo  - Warning: CreateComponent.h not found at header\
+    echo  - Warning: CustomizeImplant.h not found at header\
 )
 
 :: 可选：复制所有头文件（如果有多个）

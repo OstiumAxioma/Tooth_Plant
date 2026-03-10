@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(CreateComponent LANGUAGES CXX)
+project(CustomizeImplant LANGUAGES CXX)
 
 # 生成编译数据库供IDE使用
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -38,25 +38,26 @@ find_package(VTK 8.2 REQUIRED)
 
 # 源文件
 set(SOURCES
-    src/CreateComponent.cpp
+    src/CustomizeImplant.cpp
 )
 
 # 头文件
 set(HEADERS
-    header/CreateComponent.h
+    header/CustomizeImplant.h
 )
 
 # 静态库目标
-add_library(${PROJECT_NAME} STATIC ${SOURCES} ${HEADERS})
+add_library(CustomizeImplant STATIC ${SOURCES} ${HEADERS})
 
-target_include_directories(${PROJECT_NAME} PUBLIC
+target_include_directories(CustomizeImplant PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/header
+    ${CMAKE_CURRENT_SOURCE_DIR}/../header
 )
 
-target_link_libraries(${PROJECT_NAME} PUBLIC
+target_link_libraries(CustomizeImplant PUBLIC
     ${VTK_LIBRARIES}
 )
 
 if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /utf-8)
+    target_compile_options(CustomizeImplant PRIVATE /utf-8)
 endif()
