@@ -339,7 +339,7 @@ QWidget* MainWindow::buildControls()
         auto grp = makeGroup("基台圆台参数");
         makeSliderRow(grp.second, "下圆半径", 1, 100, 12, abutmentBottomRadiusSlider, abutmentBottomRadiusValueLabel);
         makeSliderRow(grp.second, "上圆半径", 1, 100, 8, abutmentTopRadiusSlider, abutmentTopRadiusValueLabel);
-        makeSliderRow(grp.second, "夹角", 0, 179, 15, abutmentAngleSlider, abutmentAngleValueLabel);
+        makeSliderRow(grp.second, "夹角", 0, 50, 15, abutmentAngleSlider, abutmentAngleValueLabel);
         makeSliderRow(grp.second, "方位角", 0, 359, 0, abutmentAzimuthSlider, abutmentAzimuthValueLabel);
         makeSliderRow(grp.second, "中心线长度", 1, 200, 12, abutmentLengthSlider, abutmentLengthValueLabel);
         layout->addWidget(grp.first);

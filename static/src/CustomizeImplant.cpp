@@ -124,7 +124,7 @@
     }
     void ComponentCreator::setBaseBottomRadius(double radius) { pImpl->baseBottomRadius = radius; }
     void ComponentCreator::setBaseTopRadius(double radius) { pImpl->baseTopLoftRadius = radius; }
-    void ComponentCreator::setBaseAngle(double angle) { pImpl->baseAngle = angle; }
+    void ComponentCreator::setBaseAngle(double angle) { pImpl->baseAngle = qBound(0.0, angle, 50.0); }
     void ComponentCreator::setBaseAzimuth(double angle) { pImpl->baseAzimuth = angle; }
     void ComponentCreator::setBaseLength(double length) { pImpl->baseLength = length; }
 
@@ -167,6 +167,28 @@
             vtkMath::Cross(b.n, b.u, b.v);
             vtkMath::Normalize(b.v);
             return b;
+        }
+
+        Basis MakeBasisFromPrevious(const double dir[3], const Basis& previous) {
+            double projectedU[3] = {
+                previous.u[0] - vtkMath::Dot(previous.u, dir) * dir[0],
+                previous.u[1] - vtkMath::Dot(previous.u, dir) * dir[1],
+                previous.u[2] - vtkMath::Dot(previous.u, dir) * dir[2]
+            };
+            if (vtkMath::Norm(projectedU) > 1e-6) {
+                return MakeBasisWithReference(dir, previous.u);
+            }
+
+            double projectedV[3] = {
+                previous.v[0] - vtkMath::Dot(previous.v, dir) * dir[0],
+                previous.v[1] - vtkMath::Dot(previous.v, dir) * dir[1],
+                previous.v[2] - vtkMath::Dot(previous.v, dir) * dir[2]
+            };
+            if (vtkMath::Norm(projectedV) > 1e-6) {
+                return MakeBasisWithReference(dir, previous.v);
+            }
+
+            return MakeBasis(dir);
         }
 
         struct CircleFrame {
@@ -715,7 +737,7 @@
         topFrame.center[0] = bottomFrame.center[0] + centerline[0] * length;
         topFrame.center[1] = bottomFrame.center[1] + centerline[1] * length;
         topFrame.center[2] = bottomFrame.center[2] + centerline[2] * length;
-        topFrame.basis = MakeBasisWithReference(centerline, lateral);
+        topFrame.basis = MakeBasisFromPrevious(centerline, bottomFrame.basis);
         topFrame.radius = topRadius;
 
         auto bottomCap = BuildDiskWorld(bottomFrame, segments, true);
