@@ -21,28 +21,37 @@
 #include <vtkSTLWriter.h>
 #include <vtkTransform.h>
 #include <vtkTransformFilter.h>
-#include <vtkTransformPolyDataFilter.h>  // 针对PolyData
+#include <vtkTransformPolyDataFilter.h>
 
     class ComponentCreator::Impl {
     public:
         double startPoint[3]{ 0.0, 0.0, 0.0 };
         double endPoint[3]{ 0.0, 0.0, 1.0 };
-        double neckHeight{ -1.0 }; // 截锥
-        double bodyHeight{ -1.0 }; // 颈部圆柱
+        double neckHeight{ -1.0 };
+        double bodyHeight{ -1.0 };
         double headHeight{ -1.0 };
         double baseTopRadius{ -1.0 };
         double totalRadius{ -1.0 };
         int resolution{ 32 };
         double threadDepth{ 0.0 };
         int threadTurns{ 0 };
+        double baseCenter[3]{ 0.0, 0.0, 0.0 };
+        double baseBottomRadius{ -1.0 };
+        double baseTopLoftRadius{ -1.0 };
+        double baseAngle{ 0.0 };
+        double baseAzimuth{ 0.0 };
+        double baseLength{ -1.0 };
 
         vtkSmartPointer<vtkActor> actor;
         vtkSmartPointer<vtkPolyDataMapper> mapper;
+        vtkSmartPointer<vtkActor> baseActor;
+        vtkSmartPointer<vtkPolyDataMapper> baseMapper;
     };
 
     ComponentCreator::ComponentCreator(ComponentCreator&& other): pImpl(std::move(other.pImpl))
     {
         savePath = other.savePath;
+        baseSavePath = other.baseSavePath;
     }
 
     ComponentCreator& ComponentCreator::operator=(ComponentCreator&& other) noexcept
@@ -51,6 +60,7 @@
         {
             this->pImpl = std::move(other.pImpl);
             savePath = other.savePath;
+            baseSavePath = other.baseSavePath;
         }
         return *this;
     }
@@ -65,7 +75,22 @@
         pImpl->headHeight = 1;
         pImpl->bodyHeight = (implantInfo.length - 2) <= 0 ? 2 : implantInfo.length - 2;
         pImpl->baseTopRadius = implantInfo.matchingDiameter / 2;
+        pImpl->baseCenter[0] = pImpl->startPoint[0];
+        pImpl->baseCenter[1] = pImpl->startPoint[1];
+        pImpl->baseCenter[2] = pImpl->startPoint[2];
+        pImpl->baseBottomRadius = pImpl->baseTopRadius > 0.0 ? pImpl->baseTopRadius : 1.0;
+        pImpl->baseTopLoftRadius = pImpl->totalRadius > 0.0 ? pImpl->totalRadius : 0.8;
+        pImpl->baseLength = 1.0;
         savePath = implantInfo.stlPath.toStdString();
+        if (!savePath.empty()) {
+            const std::size_t extPos = savePath.find_last_of('.');
+            const std::size_t slashPos = savePath.find_last_of("/\\");
+            if (extPos != std::string::npos && (slashPos == std::string::npos || extPos > slashPos)) {
+                baseSavePath = savePath.substr(0, extPos) + "_base" + savePath.substr(extPos);
+            } else {
+                baseSavePath = savePath + "_base.stl";
+            }
+        }
     }
 
     void ComponentCreator::setStartPoint(double x, double y, double z) {
@@ -92,13 +117,23 @@
     void ComponentCreator::setResolution(int resolution) { pImpl->resolution = resolution; }
     void ComponentCreator::setThreadDepth(double depth) { pImpl->threadDepth = depth; }
     void ComponentCreator::setThreadTurns(int turns) { pImpl->threadTurns = turns; }
+    void ComponentCreator::setBaseCenter(double x, double y, double z) {
+        pImpl->baseCenter[0] = x;
+        pImpl->baseCenter[1] = y;
+        pImpl->baseCenter[2] = z;
+    }
+    void ComponentCreator::setBaseBottomRadius(double radius) { pImpl->baseBottomRadius = radius; }
+    void ComponentCreator::setBaseTopRadius(double radius) { pImpl->baseTopLoftRadius = radius; }
+    void ComponentCreator::setBaseAngle(double angle) { pImpl->baseAngle = angle; }
+    void ComponentCreator::setBaseAzimuth(double angle) { pImpl->baseAzimuth = angle; }
+    void ComponentCreator::setBaseLength(double length) { pImpl->baseLength = length; }
 
     namespace {
 
         struct Basis {
-            double n[3]; // 轴向（start->end）
-            double u[3]; // 与 n 垂直的单位向量
-            double v[3]; // u×n
+            double n[3];
+            double u[3];
+            double v[3];
         };
 
         Basis MakeBasis(const double dir[3]) {
@@ -111,7 +146,154 @@
             return b;
         }
 
-        // 沿 start->end 轴直接生成截锥（start 为顶，上大下小）
+        Basis MakeBasisWithReference(const double dir[3], const double reference[3]) {
+            Basis b{};
+            b.n[0] = dir[0]; b.n[1] = dir[1]; b.n[2] = dir[2];
+            vtkMath::Normalize(b.n);
+
+            double refProj[3] = {
+                reference[0] - vtkMath::Dot(reference, b.n) * b.n[0],
+                reference[1] - vtkMath::Dot(reference, b.n) * b.n[1],
+                reference[2] - vtkMath::Dot(reference, b.n) * b.n[2]
+            };
+            if (vtkMath::Norm(refProj) <= 1e-6) {
+                return MakeBasis(b.n);
+            }
+
+            vtkMath::Normalize(refProj);
+            b.u[0] = refProj[0];
+            b.u[1] = refProj[1];
+            b.u[2] = refProj[2];
+            vtkMath::Cross(b.n, b.u, b.v);
+            vtkMath::Normalize(b.v);
+            return b;
+        }
+
+        struct CircleFrame {
+            double center[3];
+            Basis basis;
+            double radius{ 1.0 };
+        };
+
+        double DegreesToRadians(double angle) {
+            return angle * vtkMath::Pi() / 180.0;
+        }
+
+        vtkSmartPointer<vtkPolyData> BuildDiskWorld(const CircleFrame& frame, int resolution, bool reverseWinding) {
+            auto points = vtkSmartPointer<vtkPoints>::New();
+            auto polys = vtkSmartPointer<vtkCellArray>::New();
+            const double full = vtkMath::Pi() * 2.0;
+
+            for (int i = 0; i < resolution; ++i) {
+                const double angle = full * i / resolution;
+                const double c = std::cos(angle);
+                const double s = std::sin(angle);
+                const double x = frame.center[0] + frame.basis.u[0] * frame.radius * c + frame.basis.v[0] * frame.radius * s;
+                const double y = frame.center[1] + frame.basis.u[1] * frame.radius * c + frame.basis.v[1] * frame.radius * s;
+                const double z = frame.center[2] + frame.basis.u[2] * frame.radius * c + frame.basis.v[2] * frame.radius * s;
+                points->InsertNextPoint(x, y, z);
+            }
+
+            const vtkIdType centerId = points->InsertNextPoint(frame.center);
+            for (int i = 0; i < resolution; ++i) {
+                const vtkIdType p0 = i;
+                const vtkIdType p1 = (i + 1) % resolution;
+                auto tri = vtkSmartPointer<vtkTriangle>::New();
+                tri->GetPointIds()->SetId(0, centerId);
+                if (reverseWinding) {
+                    tri->GetPointIds()->SetId(1, p1);
+                    tri->GetPointIds()->SetId(2, p0);
+                } else {
+                    tri->GetPointIds()->SetId(1, p0);
+                    tri->GetPointIds()->SetId(2, p1);
+                }
+                polys->InsertNextCell(tri);
+            }
+
+            auto poly = vtkSmartPointer<vtkPolyData>::New();
+            poly->SetPoints(points);
+            poly->SetPolys(polys);
+            return poly;
+        }
+
+        vtkSmartPointer<vtkPolyData> BuildLoftWallWorld(const CircleFrame& bottom, const CircleFrame& top, int resolution) {
+            auto points = vtkSmartPointer<vtkPoints>::New();
+            auto polys = vtkSmartPointer<vtkCellArray>::New();
+            const double full = vtkMath::Pi() * 2.0;
+
+            for (int i = 0; i < resolution; ++i) {
+                const double angle = full * i / resolution;
+                const double c = std::cos(angle);
+                const double s = std::sin(angle);
+
+                const double bottomPoint[3] = {
+                    bottom.center[0] + bottom.basis.u[0] * bottom.radius * c + bottom.basis.v[0] * bottom.radius * s,
+                    bottom.center[1] + bottom.basis.u[1] * bottom.radius * c + bottom.basis.v[1] * bottom.radius * s,
+                    bottom.center[2] + bottom.basis.u[2] * bottom.radius * c + bottom.basis.v[2] * bottom.radius * s
+                };
+                const double topPoint[3] = {
+                    top.center[0] + top.basis.u[0] * top.radius * c + top.basis.v[0] * top.radius * s,
+                    top.center[1] + top.basis.u[1] * top.radius * c + top.basis.v[1] * top.radius * s,
+                    top.center[2] + top.basis.u[2] * top.radius * c + top.basis.v[2] * top.radius * s
+                };
+
+                points->InsertNextPoint(bottomPoint);
+                points->InsertNextPoint(topPoint);
+            }
+
+            for (int i = 0; i < resolution; ++i) {
+                const vtkIdType b0 = 2 * i;
+                const vtkIdType t0 = b0 + 1;
+                const vtkIdType b1 = 2 * ((i + 1) % resolution);
+                const vtkIdType t1 = b1 + 1;
+
+                auto tri1 = vtkSmartPointer<vtkTriangle>::New();
+                tri1->GetPointIds()->SetId(0, b0);
+                tri1->GetPointIds()->SetId(1, b1);
+                tri1->GetPointIds()->SetId(2, t1);
+                polys->InsertNextCell(tri1);
+
+                auto tri2 = vtkSmartPointer<vtkTriangle>::New();
+                tri2->GetPointIds()->SetId(0, b0);
+                tri2->GetPointIds()->SetId(1, t1);
+                tri2->GetPointIds()->SetId(2, t0);
+                polys->InsertNextCell(tri2);
+            }
+
+            auto poly = vtkSmartPointer<vtkPolyData>::New();
+            poly->SetPoints(points);
+            poly->SetPolys(polys);
+            return poly;
+        }
+
+        bool SavePolyDataToFile(vtkPolyData* polyData, const std::string& path) {
+            if (!polyData || path.empty()) {
+                return false;
+            }
+
+            double bounds[6];
+            polyData->GetBounds(bounds);
+            const double oldCenter[3] = {
+                (bounds[0] + bounds[1]) / 2.0,
+                (bounds[2] + bounds[3]) / 2.0,
+                (bounds[4] + bounds[5]) / 2.0
+            };
+            const double translate[3] = { -oldCenter[0], -oldCenter[1], -oldCenter[2] };
+
+            auto transform = vtkSmartPointer<vtkTransform>::New();
+            transform->Translate(translate);
+
+            auto transformFilter = vtkSmartPointer<vtkTransformPolyDataFilter>::New();
+            transformFilter->SetInputData(polyData);
+            transformFilter->SetTransform(transform);
+            transformFilter->Update();
+
+            auto stlWriter = vtkSmartPointer<vtkSTLWriter>::New();
+            stlWriter->SetFileName(path.c_str());
+            stlWriter->SetInputConnection(transformFilter->GetOutputPort());
+            return stlWriter->Write() == 1;
+        }
+
         vtkSmartPointer<vtkPolyData> BuildFrustumWorld(double topRadius, double bottomRadius, double height, int resolution,
             const double start[3], const Basis& basis) {
             auto points = vtkSmartPointer<vtkPoints>::New();
@@ -164,7 +346,6 @@
             return poly;
         }
 
-        // 沿轴向生成圆柱（顶面在 z0，底面在 z0+height）
         vtkSmartPointer<vtkPolyData> BuildCylinderWorld(double radius, double height, int resolution, double z0,
             const double start[3], const Basis& basis) {
             auto points = vtkSmartPointer<vtkPoints>::New();
@@ -231,10 +412,9 @@
             int resZ = std::max(resolution * turns * 2, turns * 16);
             double full = vtkMath::Pi() * 2.0;
             double pitch = height / static_cast<double>(turns);
-            double flatGap = 0.25;       // 两端纯平区长度（固定长度，对称）
-            double fadeLen = 0.2;      // 渐变长度（固定长度，对称）
+            double flatGap = 0.25;
+            double fadeLen = 0.2;
 
-            // 若颈部太短，按比例缩放空隙/渐变，但保持两端对称
             double needed = 2.0 * (flatGap + fadeLen);
             if (needed >= height) {
                 double scale = height / needed;
@@ -252,7 +432,7 @@
 
             auto radiusAt = [&](double zLocal, double theta) {
                 if (zLocal < flatGap || zLocal > fadeOutEnd) {
-                    return radius; // 纯平区
+                    return radius;
                 }
 
                 double phase = (zLocal / pitch) - (theta / full);
@@ -266,7 +446,7 @@
                     fade = qBound(0.0, (fadeOutEnd - zLocal) / fadeLen, 1.0);
                 }
 
-                return radius + depth * wave * fade; // 起伏并在端部渐隐
+                return radius + depth * wave * fade;
             };
 
             auto pointId = [&](int iz, int it) {
@@ -274,7 +454,6 @@
                 return static_cast<vtkIdType>(idx);
             };
 
-            // 生成点
             for (int iz = 0; iz <= resZ; ++iz) {
                 double tz = static_cast<double>(iz) / resZ;
                 double z = z0 + height * tz;
@@ -289,7 +468,6 @@
                 }
             }
 
-            // 侧面三角
             for (int iz = 0; iz < resZ; ++iz) {
                 for (int it = 0; it < resTheta; ++it) {
                     vtkIdType p00 = pointId(iz, it);
@@ -311,11 +489,9 @@
                 }
             }
 
-            // 顶盖/底盖使用平均半径封闭
             auto addCap = [&](bool top) {
                 int iz = top ? resZ : 0;
                 double z = z0 + height * (top ? 1.0 : 0.0);
-                double avgR = radius; // 取基准半径封盖
                 double center[3] = { start[0] + basis.n[0] * z,
                                      start[1] + basis.n[1] * z,
                                      start[2] + basis.n[2] * z };
@@ -358,7 +534,7 @@
             for (int ip = 0; ip <= phiRes; ++ip) {
                 double phi = (vtkMath::Pi() * 0.5) * ip / phiRes; // 0..pi/2
                 double rxy = radius * std::cos(phi);
-                double zlocal = height * std::sin(phi); // 压缩后高度
+                double zlocal = height * std::sin(phi);
                 for (int it = 0; it < thetaRes; ++it) {
                     double theta = full * it / thetaRes;
                     double c = std::cos(theta), s = std::sin(theta);
@@ -400,7 +576,6 @@
             return poly;
         }
 
-        // 不再使用（改为直接生成带螺纹的颈部网格）
         vtkSmartPointer<vtkPolyData> BuildThreadWorld(double radius, double depth, double height, int turns, int resolution,
             double z0, const double start[3], const Basis& basis) {
             auto empty = vtkSmartPointer<vtkPolyData>::New();
@@ -411,10 +586,11 @@
 
     bool ComponentCreator::saveActor()
     {
-        //vtkSmartPointer<vtkSTLWriter> stlWriter = vtkSmartPointer<vtkSTLWriter>::New();
-        //stlWriter->SetFileName(savePath.c_str());
-        //stlWriter->SetInputConnection(pImpl->actor->get)
-        return false;
+        if (!pImpl->actor || !pImpl->actor->GetMapper()) {
+            return false;
+        }
+        vtkPolyData* originalData = vtkPolyData::SafeDownCast(pImpl->actor->GetMapper()->GetInput());
+        return SavePolyDataToFile(originalData, savePath);
     }
 
     bool ComponentCreator::buildActor(int resolution) {
@@ -434,9 +610,8 @@
 
         int segments = std::max(8, (pImpl->resolution > 3 ? pImpl->resolution : resolution));
 
-        // 高度：如果未设置，给出固定默认值（不再依赖总长）
-        double neckH = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : 1.0; // 截锥
-        double bodyH = pImpl->bodyHeight > 0.0 ? pImpl->bodyHeight : 2.0; // 圆柱
+        double neckH = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : 1.0;
+        double bodyH = pImpl->bodyHeight > 0.0 ? pImpl->bodyHeight : 2.0;
         double headH = pImpl->headHeight > 0.0 ? pImpl->headHeight : 1.0;
 
         if (neckH <= 1e-6 || bodyH <= 1e-6 || headH <= 1e-6) {
@@ -450,7 +625,6 @@
 
         Basis basis = MakeBasis(dir);
 
-        // 在世界坐标直接构建三段，轴向即 start->end
         double threadDepth = pImpl->threadDepth > 0.0 ? pImpl->threadDepth : 0.1;
         int threadTurns = pImpl->threadTurns > 0 ? pImpl->threadTurns : 20;
 
@@ -476,68 +650,95 @@
         pImpl->actor = vtkSmartPointer<vtkActor>::New();
         pImpl->actor->SetMapper(pImpl->mapper);
 
-        //double bounds[6];
-        //pImpl->actor->GetBounds(bounds);
-        //pImpl->actor->SetOrigin((bounds[0] + bounds[1]) / 2.0, (bounds[2] + bounds[3]) / 2.0, (bounds[4] + bounds[5]) / 2.0);
-
-        // 获取原始数据
-        vtkPolyData* originalData = vtkPolyData::SafeDownCast(pImpl->actor->GetMapper()->GetInput());
-
-
-        // 计算平移向量
-        double bounds[6];
-        originalData->GetBounds(bounds);
-        double oldCenter[3] = {
-            (bounds[0] + bounds[1]) / 2.0,
-            (bounds[2] + bounds[3]) / 2.0,
-            (bounds[4] + bounds[5]) / 2.0
-        };
-        double newCenter[3] = { 0.0, 0.0, 0.0 };
-        double translate[3] = {
-            newCenter[0] - oldCenter[0],
-            newCenter[1] - oldCenter[1],
-            newCenter[2] - oldCenter[2]
-        };
-
-
-        // 创建变换
-        vtkSmartPointer<vtkTransform> transform = vtkSmartPointer<vtkTransform>::New();
-        transform->Translate(translate);
-
-
-        // 创建变换过滤器
-        vtkSmartPointer<vtkTransformPolyDataFilter> transformFilter =
-            vtkSmartPointer<vtkTransformPolyDataFilter>::New();
-        transformFilter->SetInputData(originalData);
-        transformFilter->SetTransform(transform);
-        transformFilter->Update();
-
-        // 获取变换后的数据
-        //vtkSmartPointer<vtkPolyData> transformedData = transformFilter->GetOutput();
-
-
-        //// 创建新的mapper
-        //vtkSmartPointer<vtkPolyDataMapper> newMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
-        //newMapper->SetInputData(transformedData);
-
-
-        //// 替换actor的mapper
-        //pImpl->actor->SetMapper(newMapper);
-
-
-        //// 重置actor的位置和原点
-        //pImpl->actor->SetPosition(0, 0, 0);
-        //pImpl->actor->SetOrigin(0, 0, 0);
-        //pImpl->actor->Modified();
-
-        vtkSmartPointer<vtkSTLWriter> stlWriter = vtkSmartPointer<vtkSTLWriter>::New();
-        stlWriter->SetFileName(savePath.c_str());
-        stlWriter->SetInputConnection(transformFilter->GetOutputPort());
-        stlWriter->Write();
-       
         return true;
     }
 
     vtkActor* ComponentCreator::getActor() const { return pImpl->actor; }
 
+    bool ComponentCreator::saveBase()
+    {
+        if (!pImpl->baseActor || !pImpl->baseActor->GetMapper()) {
+            return false;
+        }
+        vtkPolyData* baseData = vtkPolyData::SafeDownCast(pImpl->baseActor->GetMapper()->GetInput());
+        return SavePolyDataToFile(baseData, baseSavePath);
+    }
 
+    bool ComponentCreator::buildBase(int resolution) {
+        double normal[3] = {
+            pImpl->endPoint[0] - pImpl->startPoint[0],
+            pImpl->endPoint[1] - pImpl->startPoint[1],
+            pImpl->endPoint[2] - pImpl->startPoint[2]
+        };
+        if (vtkMath::Norm(normal) <= 1e-6) {
+            normal[0] = 0.0;
+            normal[1] = 0.0;
+            normal[2] = 1.0;
+        } else {
+            vtkMath::Normalize(normal);
+        }
+
+        const double bottomRadius = pImpl->baseBottomRadius > 1e-6 ? pImpl->baseBottomRadius : 1.0;
+        const double topRadius = pImpl->baseTopLoftRadius > 1e-6 ? pImpl->baseTopLoftRadius : bottomRadius;
+        const double length = pImpl->baseLength > 1e-6 ? pImpl->baseLength : 1.0;
+        if (bottomRadius <= 1e-6 || topRadius <= 1e-6 || length <= 1e-6) {
+            return false;
+        }
+
+        const int segments = std::max(8, (pImpl->resolution > 3 ? pImpl->resolution : resolution));
+        const Basis lowerBasis = MakeBasis(normal);
+        const double angleRadians = DegreesToRadians(pImpl->baseAngle);
+        const double azimuthRadians = DegreesToRadians(pImpl->baseAzimuth);
+
+        double lateral[3] = {
+            lowerBasis.u[0] * std::cos(azimuthRadians) + lowerBasis.v[0] * std::sin(azimuthRadians),
+            lowerBasis.u[1] * std::cos(azimuthRadians) + lowerBasis.v[1] * std::sin(azimuthRadians),
+            lowerBasis.u[2] * std::cos(azimuthRadians) + lowerBasis.v[2] * std::sin(azimuthRadians)
+        };
+        vtkMath::Normalize(lateral);
+
+        double centerline[3] = {
+            normal[0] * std::cos(angleRadians) + lateral[0] * std::sin(angleRadians),
+            normal[1] * std::cos(angleRadians) + lateral[1] * std::sin(angleRadians),
+            normal[2] * std::cos(angleRadians) + lateral[2] * std::sin(angleRadians)
+        };
+        vtkMath::Normalize(centerline);
+
+        CircleFrame bottomFrame{};
+        bottomFrame.center[0] = pImpl->baseCenter[0];
+        bottomFrame.center[1] = pImpl->baseCenter[1];
+        bottomFrame.center[2] = pImpl->baseCenter[2];
+        bottomFrame.basis = lowerBasis;
+        bottomFrame.radius = bottomRadius;
+
+        CircleFrame topFrame{};
+        topFrame.center[0] = bottomFrame.center[0] + centerline[0] * length;
+        topFrame.center[1] = bottomFrame.center[1] + centerline[1] * length;
+        topFrame.center[2] = bottomFrame.center[2] + centerline[2] * length;
+        topFrame.basis = MakeBasisWithReference(centerline, lateral);
+        topFrame.radius = topRadius;
+
+        auto bottomCap = BuildDiskWorld(bottomFrame, segments, true);
+        auto topCap = BuildDiskWorld(topFrame, segments, false);
+        auto wall = BuildLoftWallWorld(bottomFrame, topFrame, segments);
+
+        auto append = vtkSmartPointer<vtkAppendPolyData>::New();
+        append->AddInputData(bottomCap);
+        append->AddInputData(topCap);
+        append->AddInputData(wall);
+        append->Update();
+
+        auto clean = vtkSmartPointer<vtkCleanPolyData>::New();
+        clean->SetInputConnection(append->GetOutputPort());
+        clean->Update();
+
+        pImpl->baseMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+        pImpl->baseMapper->SetInputConnection(clean->GetOutputPort());
+
+        pImpl->baseActor = vtkSmartPointer<vtkActor>::New();
+        pImpl->baseActor->SetMapper(pImpl->baseMapper);
+
+        return true;
+    }
+
+    vtkActor* ComponentCreator::getBase() const { return pImpl->baseActor; }

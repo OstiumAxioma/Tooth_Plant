@@ -26,6 +26,7 @@
 #include <vtkRenderer.h>
 #include <vtkSmartPointer.h>
 #include <vtkActor.h>
+#include <vtkProperty.h>
 
 namespace {
 
@@ -46,6 +47,11 @@ QString projectRootPath()
 QString stlOutputPath()
 {
     return QDir(projectRootPath()).filePath("customize_implant_preview.stl");
+}
+
+QString baseStlOutputPath()
+{
+    return QDir(projectRootPath()).filePath("customize_implant_preview_base.stl");
 }
 
 DataDefine::ImplantInfoStu defaultImplantInfo()
@@ -140,8 +146,10 @@ void MainWindow::setupSimpleWidget()
 
     setCentralWidget(central);
     statusBar()->showMessage(
-        QString("控制面板已就绪，STL将输出到 %1").arg(QDir::toNativeSeparators(stlOutputPath())),
-        3000);
+        QString("控制面板已就绪，植体/STL输出到 %1，基台输出到 %2")
+            .arg(QDir::toNativeSeparators(stlOutputPath()))
+            .arg(QDir::toNativeSeparators(baseStlOutputPath())),
+        4000);
 }
 
 void MainWindow::setupVTKWidget()
@@ -200,6 +208,11 @@ void MainWindow::updateActorFromControls()
     int resolution = resolutionSlider->value();
     double threadDepth = toSize(threadDepthSlider);
     int threadTurns = threadTurnsSlider->value();
+    double baseBottomRadius = toSize(abutmentBottomRadiusSlider);
+    double baseTopRadius = toSize(abutmentTopRadiusSlider);
+    double baseAngle = abutmentAngleSlider->value();
+    double baseAzimuth = abutmentAzimuthSlider->value();
+    double baseLength = toSize(abutmentLengthSlider);
 
     componentCreator->setNeckHeight(neckH);
     componentCreator->setBodyHeight(bodyH);
@@ -209,20 +222,47 @@ void MainWindow::updateActorFromControls()
     componentCreator->setThreadDepth(threadDepth);
     componentCreator->setThreadTurns(threadTurns);
     componentCreator->setTotalDiameter(totalDiameter);
+    componentCreator->setBaseCenter(start[0], start[1], start[2]);
+    componentCreator->setBaseBottomRadius(baseBottomRadius);
+    componentCreator->setBaseTopRadius(baseTopRadius);
+    componentCreator->setBaseAngle(baseAngle);
+    componentCreator->setBaseAzimuth(baseAzimuth);
+    componentCreator->setBaseLength(baseLength);
 
-    if(!componentCreator->buildActor(resolution)) {
-        statusBar()->showMessage("参数非法，无法生成植体", 2000);
+    const bool implantOk = componentCreator->buildActor(resolution);
+    const bool baseOk = componentCreator->buildBase(resolution);
+
+    renderer->RemoveAllViewProps();
+
+    if (implantOk) {
+        if (vtkActor* actor = componentCreator->getActor()) {
+            actor->GetProperty()->SetColor(0.82, 0.82, 0.85);
+            renderer->AddActor(actor);
+        }
+    }
+
+    if (baseOk) {
+        if (vtkActor* actor = componentCreator->getBase()) {
+            actor->GetProperty()->SetColor(0.92, 0.72, 0.32);
+            renderer->AddActor(actor);
+        }
+    }
+
+    if (!implantOk && !baseOk) {
+        statusBar()->showMessage("植体和基台参数非法，无法生成模型", 2000);
+        vtkWidget->GetRenderWindow()->Render();
         return;
     }
 
-    if (vtkActor* actor = componentCreator->getActor()) {
-        renderer->RemoveAllViewProps();
-        renderer->AddActor(actor);
-        renderer->ResetCamera();
-        vtkWidget->GetRenderWindow()->Render();
-        statusBar()->showMessage("植体模型已更新", 1000);
+    renderer->ResetCamera();
+    vtkWidget->GetRenderWindow()->Render();
+
+    if (implantOk && baseOk) {
+        statusBar()->showMessage("植体与基台模型已更新", 1200);
+    } else if (implantOk) {
+        statusBar()->showMessage("植体已更新，基台参数非法", 1500);
     } else {
-        statusBar()->showMessage("未生成有效的Actor", 2000);
+        statusBar()->showMessage("基台已更新，植体参数非法", 1500);
     }
 }
 
@@ -294,6 +334,21 @@ QWidget* MainWindow::buildControls()
         layout->addWidget(grp.first);
     }
 
+    // 基台参数
+    {
+        auto grp = makeGroup("基台圆台参数");
+        makeSliderRow(grp.second, "下圆半径", 1, 100, 12, abutmentBottomRadiusSlider, abutmentBottomRadiusValueLabel);
+        makeSliderRow(grp.second, "上圆半径", 1, 100, 8, abutmentTopRadiusSlider, abutmentTopRadiusValueLabel);
+        makeSliderRow(grp.second, "夹角", 0, 179, 15, abutmentAngleSlider, abutmentAngleValueLabel);
+        makeSliderRow(grp.second, "方位角", 0, 359, 0, abutmentAzimuthSlider, abutmentAzimuthValueLabel);
+        makeSliderRow(grp.second, "中心线长度", 1, 200, 12, abutmentLengthSlider, abutmentLengthValueLabel);
+        layout->addWidget(grp.first);
+    }
+
+    abutmentCenterInfoLabel = new QLabel(panel);
+    abutmentCenterInfoLabel->setStyleSheet("color: #555;");
+    layout->addWidget(abutmentCenterInfoLabel);
+
     // 长度提示
     lengthInfoLabel = new QLabel(panel);
     lengthInfoLabel->setStyleSheet("color: #555;");
@@ -317,6 +372,11 @@ QWidget* MainWindow::buildControls()
     connectSlider(resolutionSlider);
     connectSlider(threadDepthSlider);
     connectSlider(threadTurnsSlider);
+    connectSlider(abutmentBottomRadiusSlider);
+    connectSlider(abutmentTopRadiusSlider);
+    connectSlider(abutmentAngleSlider);
+    connectSlider(abutmentAzimuthSlider);
+    connectSlider(abutmentLengthSlider);
 
     return panel;
 }
@@ -355,12 +415,21 @@ void MainWindow::updateValueLabels()
     resolutionValueLabel->setText(QString::number(resolutionSlider->value()));
     threadDepthValueLabel->setText(QString::number(toSize(threadDepthSlider), 'f', 1));
     threadTurnsValueLabel->setText(QString::number(threadTurnsSlider->value()));
+    abutmentBottomRadiusValueLabel->setText(QString::number(toSize(abutmentBottomRadiusSlider), 'f', 1));
+    abutmentTopRadiusValueLabel->setText(QString::number(toSize(abutmentTopRadiusSlider), 'f', 1));
+    abutmentAngleValueLabel->setText(QString::number(abutmentAngleSlider->value()) + QChar(176));
+    abutmentAzimuthValueLabel->setText(QString::number(abutmentAzimuthSlider->value()) + QChar(176));
+    abutmentLengthValueLabel->setText(QString::number(toSize(abutmentLengthSlider), 'f', 1));
 
     double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
     double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };
     double dx = end[0]-start[0], dy = end[1]-start[1], dz = end[2]-start[2];
     double dirLen = std::sqrt(dx*dx + dy*dy + dz*dz);
     double sumH = toHeight(neckHeightSlider) + toHeight(bodyHeightSlider) + toHeight(headHeightSlider);
+    abutmentCenterInfoLabel->setText(QString("基台下圆中心跟随植体顶部中心: (%1, %2, %3)")
+        .arg(start[0], 0, 'f', 1)
+        .arg(start[1], 0, 'f', 1)
+        .arg(start[2], 0, 'f', 1));
     lengthInfoLabel->setText(QString("方向长度 %1 / 部件总长 %2")
         .arg(dirLen, 0, 'f', 2)
         .arg(sumH, 0, 'f', 2));

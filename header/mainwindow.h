@@ -75,6 +75,11 @@ private:
     QSlider *resolutionSlider;
     QSlider *threadDepthSlider;
     QSlider *threadTurnsSlider;
+    QSlider *abutmentBottomRadiusSlider;
+    QSlider *abutmentTopRadiusSlider;
+    QSlider *abutmentAngleSlider;
+    QSlider *abutmentAzimuthSlider;
+    QSlider *abutmentLengthSlider;
     QLabel *startValueLabels[3];
     QLabel *endValueLabels[3];
     QLabel *radiusValueLabel;
@@ -85,6 +90,12 @@ private:
     QLabel *resolutionValueLabel;
     QLabel *threadDepthValueLabel;
     QLabel *threadTurnsValueLabel;
+    QLabel *abutmentBottomRadiusValueLabel;
+    QLabel *abutmentTopRadiusValueLabel;
+    QLabel *abutmentAngleValueLabel;
+    QLabel *abutmentAzimuthValueLabel;
+    QLabel *abutmentLengthValueLabel;
+    QLabel *abutmentCenterInfoLabel;
     QLabel *lengthInfoLabel;
 };
 
