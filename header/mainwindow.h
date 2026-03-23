@@ -66,7 +66,6 @@ private:
 
     // 控制滑块
     QSlider *startSliders[3];
-    QSlider *endSliders[3];
     QSlider *radiusSlider;
     QSlider *neckHeightSlider;
     QSlider *bodyHeightSlider;
@@ -81,7 +80,6 @@ private:
     QSlider *abutmentAzimuthSlider;
     QSlider *abutmentLengthSlider;
     QLabel *startValueLabels[3];
-    QLabel *endValueLabels[3];
     QLabel *radiusValueLabel;
     QLabel *neckHeightValueLabel;
     QLabel *bodyHeightValueLabel;

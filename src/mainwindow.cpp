@@ -195,10 +195,8 @@ void MainWindow::updateActorFromControls()
     auto toHeight = toCoord;
 
     double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
-    double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };
 
     componentCreator->setStartPoint(start[0], start[1], start[2]);
-    componentCreator->setEndPoint(end[0], end[1], end[2]);
 
     double neckH = toHeight(neckHeightSlider);
     double bodyH = toHeight(bodyHeightSlider);
@@ -305,15 +303,6 @@ QWidget* MainWindow::buildControls()
         layout->addWidget(grp.first);
     }
 
-    // 终点
-    {
-        auto grp = makeGroup("结束点 (X,Y,Z)");
-        makeSliderRow(grp.second, "X", -100, 100, 0, endSliders[0], endValueLabels[0]);
-        makeSliderRow(grp.second, "Y", -100, 100, 0, endSliders[1], endValueLabels[1]);
-        makeSliderRow(grp.second, "Z", -100, 100, 20, endSliders[2], endValueLabels[2]); // 默认Z=2.0
-        layout->addWidget(grp.first);
-    }
-
     // 总直径
     {
         auto grp = makeGroup("植体总直径");
@@ -363,7 +352,6 @@ QWidget* MainWindow::buildControls()
         connect(s, &QSlider::valueChanged, this, &MainWindow::updateActorFromControls);
     };
     connectSlider(startSliders[0]); connectSlider(startSliders[1]); connectSlider(startSliders[2]);
-    connectSlider(endSliders[0]);   connectSlider(endSliders[1]);   connectSlider(endSliders[2]);
     connectSlider(radiusSlider);
     connectSlider(neckHeightSlider);
     connectSlider(bodyHeightSlider);
@@ -403,10 +391,6 @@ void MainWindow::updateValueLabels()
     startValueLabels[1]->setText(QString::number(toCoord(startSliders[1]), 'f', 1));
     startValueLabels[2]->setText(QString::number(toCoord(startSliders[2]), 'f', 1));
 
-    endValueLabels[0]->setText(QString::number(toCoord(endSliders[0]), 'f', 1));
-    endValueLabels[1]->setText(QString::number(toCoord(endSliders[1]), 'f', 1));
-    endValueLabels[2]->setText(QString::number(toCoord(endSliders[2]), 'f', 1));
-
     radiusValueLabel->setText(QString::number(toSize(radiusSlider), 'f', 1));
     neckHeightValueLabel->setText(QString::number(toHeight(neckHeightSlider), 'f', 1));
     bodyHeightValueLabel->setText(QString::number(toHeight(bodyHeightSlider), 'f', 1));
@@ -422,24 +406,17 @@ void MainWindow::updateValueLabels()
     abutmentLengthValueLabel->setText(QString::number(toSize(abutmentLengthSlider), 'f', 1));
 
     double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
-    double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };
-    double dx = end[0]-start[0], dy = end[1]-start[1], dz = end[2]-start[2];
-    double dirLen = std::sqrt(dx*dx + dy*dy + dz*dz);
     double sumH = toHeight(neckHeightSlider) + toHeight(bodyHeightSlider) + toHeight(headHeightSlider);
     abutmentCenterInfoLabel->setText(QString("基台下圆中心跟随植体顶部中心: (%1, %2, %3)")
         .arg(start[0], 0, 'f', 1)
         .arg(start[1], 0, 'f', 1)
         .arg(start[2], 0, 'f', 1));
-    lengthInfoLabel->setText(QString("方向长度 %1 / 部件总长 %2")
-        .arg(dirLen, 0, 'f', 2)
+    lengthInfoLabel->setText(QString("部件总长 %1")
         .arg(sumH, 0, 'f', 2));
 }
 
 double MainWindow::currentLength() const
 {
-    auto toCoord = [](QSlider *s) { return s->value() / 10.0; };
-    double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
-    double end[3]   = { toCoord(endSliders[0]), toCoord(endSliders[1]), toCoord(endSliders[2]) };
-    double dx = end[0]-start[0], dy = end[1]-start[1], dz = end[2]-start[2];
-    return std::sqrt(dx*dx + dy*dy + dz*dz);
+    auto toHeight = [](QSlider *s) { return s->value() / 10.0; };
+    return toHeight(neckHeightSlider) + toHeight(bodyHeightSlider) + toHeight(headHeightSlider);
 }

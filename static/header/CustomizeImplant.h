@@ -22,8 +22,6 @@ public:
 
     // 设置种植体轴线起点。
     void setStartPoint(double x, double y, double z);
-    // 设置种植体轴线终点。
-    void setEndPoint(double x, double y, double z);
 
     // 设置颈部高度。
     void setNeckHeight(double height);

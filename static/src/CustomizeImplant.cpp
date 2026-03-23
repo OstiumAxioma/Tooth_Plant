@@ -26,7 +26,6 @@
     class ComponentCreator::Impl {
     public:
         double startPoint[3]{ 0.0, 0.0, 0.0 };
-        double endPoint[3]{ 0.0, 0.0, 1.0 };
         double neckHeight{ -1.0 };
         double bodyHeight{ -1.0 };
         double headHeight{ -1.0 };
@@ -97,12 +96,6 @@
         pImpl->startPoint[0] = x;
         pImpl->startPoint[1] = y;
         pImpl->startPoint[2] = z;
-    }
-
-    void ComponentCreator::setEndPoint(double x, double y, double z) {
-        pImpl->endPoint[0] = x;
-        pImpl->endPoint[1] = y;
-        pImpl->endPoint[2] = z;
     }
 
     void ComponentCreator::setTotalDiameter(double diameter)
@@ -617,18 +610,11 @@
 
     bool ComponentCreator::buildActor(int resolution) {
         auto radius = pImpl->totalRadius;
-        double dir[3] = {
-            pImpl->startPoint[0] - pImpl->endPoint[0],
-            pImpl->startPoint[1] - pImpl->endPoint[1],
-            pImpl->startPoint[2] - pImpl->endPoint[2]
-        };
+        double dir[3] = { 0.0, 0.0, -1.0 };
 
-        double length = vtkMath::Norm(dir);
-        if (length <= 1e-6 || radius <= 1e-6) {
+        if (radius <= 1e-6) {
             return false;
         }
-
-        vtkMath::Normalize(dir);
 
         int segments = std::max(8, (pImpl->resolution > 3 ? pImpl->resolution : resolution));
 
@@ -680,18 +666,7 @@
     }
 
     bool ComponentCreator::buildBase(int resolution) {
-        double normal[3] = {
-            pImpl->endPoint[0] - pImpl->startPoint[0],
-            pImpl->endPoint[1] - pImpl->startPoint[1],
-            pImpl->endPoint[2] - pImpl->startPoint[2]
-        };
-        if (vtkMath::Norm(normal) <= 1e-6) {
-            normal[0] = 0.0;
-            normal[1] = 0.0;
-            normal[2] = 1.0;
-        } else {
-            vtkMath::Normalize(normal);
-        }
+        double normal[3] = { 0.0, 0.0, 1.0 };
 
         const double bottomRadius = pImpl->baseBottomRadius > 1e-6 ? pImpl->baseBottomRadius : 1.0;
         const double topRadius = pImpl->baseTopLoftRadius > 1e-6 ? pImpl->baseTopLoftRadius : bottomRadius;
