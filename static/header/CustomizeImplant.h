@@ -31,8 +31,8 @@ public:
     void setBodyHeight(double height);
     // 设置头部高度。
     void setHeadHeight(double height);
-    // 设置种植体顶部连接直径。
-    void setBaseTopDiameter(double radius);
+    // 设置颈部(Neck)直径。
+    void setNeckDiameter(double diameter);
     // 设置圆周采样分段数。
     void setResolution(int resolution);
     // 设置螺纹深度。
@@ -55,7 +55,7 @@ public:
     bool saveBase();
     // 获取最近一次构建的基台 Actor。
     vtkActor* getBase() const;
-    // 设置基台下圆中心点。
+    // 设置Neck生成起始点（Neck延法向向上延伸，基台在Neck上方生成）。
     void setBaseCenter(double x, double y, double z);
     // 设置基台下圆半径。
     void setBaseBottomRadius(double radius);

@@ -71,7 +71,7 @@ private:
     QSlider *neckHeightSlider;
     QSlider *bodyHeightSlider;
     QSlider *headHeightSlider;
-    QSlider *baseTopRadiusSlider;
+    QSlider *neckDiameterSlider;
     QSlider *resolutionSlider;
     QSlider *threadDepthSlider;
     QSlider *threadTurnsSlider;
@@ -86,7 +86,7 @@ private:
     QLabel *neckHeightValueLabel;
     QLabel *bodyHeightValueLabel;
     QLabel *headHeightValueLabel;
-    QLabel *baseTopRadiusValueLabel;
+    QLabel *neckDiameterValueLabel;
     QLabel *resolutionValueLabel;
     QLabel *threadDepthValueLabel;
     QLabel *threadTurnsValueLabel;

@@ -30,7 +30,7 @@
         double neckHeight{ -1.0 };
         double bodyHeight{ -1.0 };
         double headHeight{ -1.0 };
-        double baseTopRadius{ -1.0 };
+        double neckRadius{ -1.0 };
         double totalRadius{ -1.0 };
         int resolution{ 32 };
         double threadDepth{ 0.0 };
@@ -74,11 +74,11 @@
         pImpl->neckHeight = 1;
         pImpl->headHeight = 1;
         pImpl->bodyHeight = (implantInfo.length - 2) <= 0 ? 2 : implantInfo.length - 2;
-        pImpl->baseTopRadius = implantInfo.matchingDiameter / 2;
+        pImpl->neckRadius = implantInfo.matchingDiameter / 2.0;
         pImpl->baseCenter[0] = pImpl->startPoint[0];
         pImpl->baseCenter[1] = pImpl->startPoint[1];
         pImpl->baseCenter[2] = pImpl->startPoint[2];
-        pImpl->baseBottomRadius = pImpl->baseTopRadius > 0.0 ? pImpl->baseTopRadius : 1.0;
+        pImpl->baseBottomRadius = pImpl->neckRadius > 0.0 ? pImpl->neckRadius : 1.0;
         pImpl->baseTopLoftRadius = pImpl->totalRadius > 0.0 ? pImpl->totalRadius : 0.8;
         pImpl->baseLength = 1.0;
         savePath = implantInfo.stlPath.toStdString();
@@ -113,7 +113,7 @@
     void ComponentCreator::setNeckHeight(double height) { pImpl->neckHeight = height; }
     void ComponentCreator::setBodyHeight(double height) { pImpl->bodyHeight = height; }
     void ComponentCreator::setHeadHeight(double height) { pImpl->headHeight = height; }
-    void ComponentCreator::setBaseTopDiameter(double radius) { pImpl->baseTopRadius = radius / 2; }
+    void ComponentCreator::setNeckDiameter(double diameter) { pImpl->neckRadius = diameter / 2.0; }
     void ComponentCreator::setResolution(int resolution) { pImpl->resolution = resolution; }
     void ComponentCreator::setThreadDepth(double depth) { pImpl->threadDepth = depth; }
     void ComponentCreator::setThreadTurns(int turns) { pImpl->threadTurns = turns; }
@@ -640,24 +640,17 @@
             return false;
         }
 
-        double topRadius = pImpl->baseTopRadius > radius ? pImpl->baseTopRadius : radius * 1.1;
-        if (topRadius <= radius) {
-            topRadius = radius * 1.05;
-        }
-
         Basis basis = MakeBasis(dir);
 
         double threadDepth = pImpl->threadDepth > 0.0 ? pImpl->threadDepth : 0.1;
         int threadTurns = pImpl->threadTurns > 0 ? pImpl->threadTurns : 20;
 
-        auto neck = BuildFrustumWorld(topRadius, radius, neckH, segments, pImpl->startPoint, basis);
         auto body = (threadDepth > 0.0 && threadTurns > 0)
-            ? BuildThreadedCylinderWorld(radius, threadDepth, bodyH, threadTurns, segments, neckH, pImpl->startPoint, basis)
-            : BuildCylinderWorld(radius, bodyH, segments, neckH, pImpl->startPoint, basis);
-        auto head = BuildHemisphereWorld(radius, headH, segments, neckH + bodyH, pImpl->startPoint, basis);
+            ? BuildThreadedCylinderWorld(radius, threadDepth, bodyH, threadTurns, segments, 0.0, pImpl->startPoint, basis)
+            : BuildCylinderWorld(radius, bodyH, segments, 0.0, pImpl->startPoint, basis);
+        auto head = BuildHemisphereWorld(radius, headH, segments, bodyH, pImpl->startPoint, basis);
 
         auto append = vtkSmartPointer<vtkAppendPolyData>::New();
-        append->AddInputData(neck);
         append->AddInputData(body);
         append->AddInputData(head);
         append->Update();
@@ -726,10 +719,13 @@
         };
         vtkMath::Normalize(centerline);
 
+        double neckHeight = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : 1.0;
+        double neckRadius = pImpl->neckRadius > 0.0 ? pImpl->neckRadius : 1.2;
+
         CircleFrame bottomFrame{};
-        bottomFrame.center[0] = pImpl->baseCenter[0];
-        bottomFrame.center[1] = pImpl->baseCenter[1];
-        bottomFrame.center[2] = pImpl->baseCenter[2];
+        bottomFrame.center[0] = pImpl->baseCenter[0] + normal[0] * neckHeight;
+        bottomFrame.center[1] = pImpl->baseCenter[1] + normal[1] * neckHeight;
+        bottomFrame.center[2] = pImpl->baseCenter[2] + normal[2] * neckHeight;
         bottomFrame.basis = lowerBasis;
         bottomFrame.radius = bottomRadius;
 
@@ -740,11 +736,14 @@
         topFrame.basis = MakeBasisFromPrevious(centerline, bottomFrame.basis);
         topFrame.radius = topRadius;
 
+        auto neckLayer = BuildCylinderWorld(neckRadius, neckHeight, segments, 0.0, pImpl->baseCenter, lowerBasis);
+
         auto bottomCap = BuildDiskWorld(bottomFrame, segments, true);
         auto topCap = BuildDiskWorld(topFrame, segments, false);
         auto wall = BuildLoftWallWorld(bottomFrame, topFrame, segments);
 
         auto append = vtkSmartPointer<vtkAppendPolyData>::New();
+        append->AddInputData(neckLayer);
         append->AddInputData(bottomCap);
         append->AddInputData(topCap);
         append->AddInputData(wall);

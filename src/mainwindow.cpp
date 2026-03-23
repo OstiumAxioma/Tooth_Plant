@@ -204,7 +204,7 @@ void MainWindow::updateActorFromControls()
     double bodyH = toHeight(bodyHeightSlider);
     double headH = toHeight(headHeightSlider);
     double totalDiameter = toSize(radiusSlider);
-    double baseTopDiameter = toSize(baseTopRadiusSlider);
+    double neckDiameter = toSize(neckDiameterSlider);
     int resolution = resolutionSlider->value();
     double threadDepth = toSize(threadDepthSlider);
     int threadTurns = threadTurnsSlider->value();
@@ -217,7 +217,7 @@ void MainWindow::updateActorFromControls()
     componentCreator->setNeckHeight(neckH);
     componentCreator->setBodyHeight(bodyH);
     componentCreator->setHeadHeight(headH);
-    componentCreator->setBaseTopDiameter(baseTopDiameter);
+    componentCreator->setNeckDiameter(neckDiameter);
     componentCreator->setResolution(resolution);
     componentCreator->setThreadDepth(threadDepth);
     componentCreator->setThreadTurns(threadTurns);
@@ -327,7 +327,7 @@ QWidget* MainWindow::buildControls()
         makeSliderRow(grp.second, "Neck高度", 1, 300, 10, neckHeightSlider, neckHeightValueLabel);   // 截锥，默认1.0
         makeSliderRow(grp.second, "Body高度", 1, 300, 20, bodyHeightSlider, bodyHeightValueLabel);  // 圆柱，默认2.0
         makeSliderRow(grp.second, "Head高度", 1, 300, 10, headHeightSlider, headHeightValueLabel);  // 默认1.0
-        makeSliderRow(grp.second, "Neck上底直径", 1, 300, 24, baseTopRadiusSlider, baseTopRadiusValueLabel); // 0.1~30.0
+        makeSliderRow(grp.second, "Neck直径", 1, 300, 24, neckDiameterSlider, neckDiameterValueLabel); // 0.1~30.0
         makeSliderRow(grp.second, "分段(Resolution)", 8, 120, 32, resolutionSlider, resolutionValueLabel);
         makeSliderRow(grp.second, "螺纹深度", 0, 100, 1, threadDepthSlider, threadDepthValueLabel); // 默认0.1
         makeSliderRow(grp.second, "螺纹圈数", 0, 50, 20, threadTurnsSlider, threadTurnsValueLabel); // 默认20
@@ -368,7 +368,7 @@ QWidget* MainWindow::buildControls()
     connectSlider(neckHeightSlider);
     connectSlider(bodyHeightSlider);
     connectSlider(headHeightSlider);
-    connectSlider(baseTopRadiusSlider);
+    connectSlider(neckDiameterSlider);
     connectSlider(resolutionSlider);
     connectSlider(threadDepthSlider);
     connectSlider(threadTurnsSlider);
@@ -411,7 +411,7 @@ void MainWindow::updateValueLabels()
     neckHeightValueLabel->setText(QString::number(toHeight(neckHeightSlider), 'f', 1));
     bodyHeightValueLabel->setText(QString::number(toHeight(bodyHeightSlider), 'f', 1));
     headHeightValueLabel->setText(QString::number(toHeight(headHeightSlider), 'f', 1));
-    baseTopRadiusValueLabel->setText(QString::number(toSize(baseTopRadiusSlider), 'f', 1));
+    neckDiameterValueLabel->setText(QString::number(toSize(neckDiameterSlider), 'f', 1));
     resolutionValueLabel->setText(QString::number(resolutionSlider->value()));
     threadDepthValueLabel->setText(QString::number(toSize(threadDepthSlider), 'f', 1));
     threadTurnsValueLabel->setText(QString::number(threadTurnsSlider->value()));

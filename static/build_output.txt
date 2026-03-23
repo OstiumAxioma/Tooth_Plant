@@ -1,0 +1,61 @@
+========================================
+CustomizeImplant Static Library Build Script
+========================================
+
+Please select build configuration:
+  1. Debug
+  2. Release  
+  3. Both (Debug and Release)
+
+Enter your choice (1-3): 
+Selected: Release configuration only
+
+========================================
+
+Creating build directory...
+Cleaning previous build completely...
+Clean complete.
+
+Configuring CustomizeImplant project...
+Running: cmake .. -G "Visual Studio 16 2019" -A x64
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.26200.
+-- The CXX compiler identification is MSVC 19.29.30159.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.29.30133/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (6.0s)
+-- Generating done (0.2s)
+-- Build files have been written to: D:/Project/Tooth/Tooth_Plant/static/build
+CMake configuration successful
+
+Building Static Library (Release mode)...
+用于 .NET Framework 的 Microsoft (R) 生成引擎版本 16.11.6+a918ceb31
+版权所有(C) Microsoft Corporation。保留所有权利。
+
+  1>Checking Build System
+  Building Custom Rule D:/Project/Tooth/Tooth_Plant/static/CMakeLists.txt
+  CustomizeImplant.cpp
+  CustomizeImplant.vcxproj -> D:\Project\Tooth\Tooth_Plant\static\build\lib\Release\CustomizeImplant.lib
+  Building Custom Rule D:/Project/Tooth/Tooth_Plant/static/CMakeLists.txt
+Release build successful
+
+
+========================================
+Build completed successfully
+========================================
+
+Copying static library files to ..\lib...
+ - CustomizeImplant.lib (Release) copied successfully
+
+Copying header files to ..\header...
+ - CustomizeImplant.h copied successfully
+
+========================================
+Operation completed
+Static libraries location: ..\lib\
+Header files location: ..\header\
+========================================
+
+Press any key to exit...
