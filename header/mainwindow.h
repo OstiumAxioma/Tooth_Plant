@@ -78,7 +78,7 @@ private:
     QSlider *abutmentTopRadiusSlider;
     QSlider *abutmentAngleSlider;
     QSlider *abutmentAzimuthSlider;
-    QSlider *abutmentLengthSlider;
+    QSlider *abutmentHeightSlider;
     QLabel *startValueLabels[3];
     QLabel *radiusValueLabel;
     QLabel *neckHeightValueLabel;
@@ -92,7 +92,7 @@ private:
     QLabel *abutmentTopRadiusValueLabel;
     QLabel *abutmentAngleValueLabel;
     QLabel *abutmentAzimuthValueLabel;
-    QLabel *abutmentLengthValueLabel;
+    QLabel *abutmentHeightValueLabel;
     QLabel *abutmentCenterInfoLabel;
     QLabel *lengthInfoLabel;
 };

@@ -63,8 +63,8 @@ public:
     void setBaseAngle(double angle);
     // 设置基台方位角，单位为度。
     void setBaseAzimuth(double angle);
-    // 设置基台中心连线长度。
-    void setBaseLength(double length);
+    // 设置基台高度。
+    void setBaseHeight(double height);
 
 private:
     class Impl;

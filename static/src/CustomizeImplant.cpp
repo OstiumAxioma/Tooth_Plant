@@ -39,7 +39,7 @@
         double baseTopLoftRadius{ -1.0 };
         double baseAngle{ 0.0 };
         double baseAzimuth{ 0.0 };
-        double baseLength{ -1.0 };
+        double baseHeight{ -1.0 };
 
         vtkSmartPointer<vtkActor> actor;
         vtkSmartPointer<vtkPolyDataMapper> mapper;
@@ -79,7 +79,7 @@
         pImpl->baseCenter[2] = pImpl->startPoint[2];
         pImpl->baseBottomRadius = pImpl->neckRadius > 0.0 ? pImpl->neckRadius : 1.0;
         pImpl->baseTopLoftRadius = pImpl->totalRadius > 0.0 ? pImpl->totalRadius : 0.8;
-        pImpl->baseLength = 1.0;
+        pImpl->baseHeight = 1.0;
         savePath = implantInfo.stlPath.toStdString();
         if (!savePath.empty()) {
             const std::size_t extPos = savePath.find_last_of('.');
@@ -119,7 +119,7 @@
     void ComponentCreator::setBaseTopRadius(double radius) { pImpl->baseTopLoftRadius = radius; }
     void ComponentCreator::setBaseAngle(double angle) { pImpl->baseAngle = qBound(0.0, angle, 50.0); }
     void ComponentCreator::setBaseAzimuth(double angle) { pImpl->baseAzimuth = angle; }
-    void ComponentCreator::setBaseLength(double length) { pImpl->baseLength = length; }
+    void ComponentCreator::setBaseHeight(double height) { pImpl->baseHeight = height; }
 
     namespace {
 
@@ -670,8 +670,8 @@
 
         const double bottomRadius = pImpl->baseBottomRadius > 1e-6 ? pImpl->baseBottomRadius : 1.0;
         const double topRadius = pImpl->baseTopLoftRadius > 1e-6 ? pImpl->baseTopLoftRadius : bottomRadius;
-        const double length = pImpl->baseLength > 1e-6 ? pImpl->baseLength : 1.0;
-        if (bottomRadius <= 1e-6 || topRadius <= 1e-6 || length <= 1e-6) {
+        const double height = pImpl->baseHeight > 1e-6 ? pImpl->baseHeight : 1.0;
+        if (bottomRadius <= 1e-6 || topRadius <= 1e-6 || height <= 1e-6) {
             return false;
         }
 
@@ -679,6 +679,7 @@
         const Basis lowerBasis = MakeBasis(normal);
         const double angleRadians = DegreesToRadians(pImpl->baseAngle);
         const double azimuthRadians = DegreesToRadians(pImpl->baseAzimuth);
+        const double length = height / std::cos(angleRadians);
 
         double lateral[3] = {
             lowerBasis.u[0] * std::cos(azimuthRadians) + lowerBasis.v[0] * std::sin(azimuthRadians),
@@ -708,7 +709,7 @@
         topFrame.center[0] = bottomFrame.center[0] + centerline[0] * length;
         topFrame.center[1] = bottomFrame.center[1] + centerline[1] * length;
         topFrame.center[2] = bottomFrame.center[2] + centerline[2] * length;
-        topFrame.basis = MakeBasisFromPrevious(centerline, bottomFrame.basis);
+        topFrame.basis = bottomFrame.basis;
         topFrame.radius = topRadius;
 
         auto neckLayer = BuildCylinderWorld(neckRadius, neckHeight, segments, 0.0, pImpl->baseCenter, lowerBasis);

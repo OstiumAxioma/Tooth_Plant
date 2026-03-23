@@ -210,7 +210,7 @@ void MainWindow::updateActorFromControls()
     double baseTopRadius = toSize(abutmentTopRadiusSlider);
     double baseAngle = abutmentAngleSlider->value();
     double baseAzimuth = abutmentAzimuthSlider->value();
-    double baseLength = toSize(abutmentLengthSlider);
+    double baseHeight = toHeight(abutmentHeightSlider);
 
     componentCreator->setNeckHeight(neckH);
     componentCreator->setBodyHeight(bodyH);
@@ -225,7 +225,7 @@ void MainWindow::updateActorFromControls()
     componentCreator->setBaseTopRadius(baseTopRadius);
     componentCreator->setBaseAngle(baseAngle);
     componentCreator->setBaseAzimuth(baseAzimuth);
-    componentCreator->setBaseLength(baseLength);
+    componentCreator->setBaseHeight(baseHeight);
 
     const bool implantOk = componentCreator->buildActor(resolution);
     const bool baseOk = componentCreator->buildBase(resolution);
@@ -325,12 +325,12 @@ QWidget* MainWindow::buildControls()
 
     // 基台参数
     {
-        auto grp = makeGroup("基台圆台参数");
+        auto grp = makeGroup("基台参数");
         makeSliderRow(grp.second, "下圆半径", 1, 100, 12, abutmentBottomRadiusSlider, abutmentBottomRadiusValueLabel);
         makeSliderRow(grp.second, "上圆半径", 1, 100, 8, abutmentTopRadiusSlider, abutmentTopRadiusValueLabel);
         makeSliderRow(grp.second, "夹角", 0, 50, 15, abutmentAngleSlider, abutmentAngleValueLabel);
         makeSliderRow(grp.second, "方位角", 0, 359, 0, abutmentAzimuthSlider, abutmentAzimuthValueLabel);
-        makeSliderRow(grp.second, "中心线长度", 1, 200, 12, abutmentLengthSlider, abutmentLengthValueLabel);
+        makeSliderRow(grp.second, "基台高度", 1, 200, 10, abutmentHeightSlider, abutmentHeightValueLabel);
         layout->addWidget(grp.first);
     }
 
@@ -364,7 +364,7 @@ QWidget* MainWindow::buildControls()
     connectSlider(abutmentTopRadiusSlider);
     connectSlider(abutmentAngleSlider);
     connectSlider(abutmentAzimuthSlider);
-    connectSlider(abutmentLengthSlider);
+    connectSlider(abutmentHeightSlider);
 
     return panel;
 }
@@ -403,7 +403,7 @@ void MainWindow::updateValueLabels()
     abutmentTopRadiusValueLabel->setText(QString::number(toSize(abutmentTopRadiusSlider), 'f', 1));
     abutmentAngleValueLabel->setText(QString::number(abutmentAngleSlider->value()) + QChar(176));
     abutmentAzimuthValueLabel->setText(QString::number(abutmentAzimuthSlider->value()) + QChar(176));
-    abutmentLengthValueLabel->setText(QString::number(toSize(abutmentLengthSlider), 'f', 1));
+    abutmentHeightValueLabel->setText(QString::number(toHeight(abutmentHeightSlider), 'f', 1));
 
     double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
     double sumH = toHeight(neckHeightSlider) + toHeight(bodyHeightSlider) + toHeight(headHeightSlider);
