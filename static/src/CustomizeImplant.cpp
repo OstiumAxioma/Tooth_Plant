@@ -26,20 +26,20 @@
     class ComponentCreator::Impl {
     public:
         double startPoint[3]{ 0.0, 0.0, 0.0 };
-        double neckHeight{ -1.0 };
-        double bodyHeight{ -1.0 };
-        double headHeight{ -1.0 };
-        double neckRadius{ -1.0 };
-        double totalRadius{ -1.0 };
+        double neckHeight{ 4.0 };
+        double bodyHeight{ 8.0 };
+        double headHeight{ 1.0 };
+        double neckRadius{ 1.25 };
+        double totalRadius{ 1.25 };
         int resolution{ 32 };
         double threadDepth{ 0.0 };
         int threadTurns{ 0 };
         double baseCenter[3]{ 0.0, 0.0, 0.0 };
-        double baseBottomRadius{ -1.0 };
-        double baseTopLoftRadius{ -1.0 };
-        double baseAngle{ 0.0 };
+        double baseBottomRadius{ 2.5 };
+        double baseTopLoftRadius{ 2.5 };
+        double baseAngle{ 15.0 };
         double baseAzimuth{ 0.0 };
-        double baseHeight{ -1.0 };
+        double baseHeight{ 5.0 };
 
         vtkSmartPointer<vtkActor> actor;
         vtkSmartPointer<vtkPolyDataMapper> mapper;
@@ -69,17 +69,9 @@
 
     ComponentCreator::ComponentCreator(DataDefine::ImplantInfoStu implantInfo) : pImpl(std::make_unique<Impl>())
     {
-        pImpl->totalRadius = implantInfo.diameter / 2;
-        pImpl->neckHeight = 1;
-        pImpl->headHeight = 1;
-        pImpl->bodyHeight = (implantInfo.length - 2) <= 0 ? 2 : implantInfo.length - 2;
-        pImpl->neckRadius = implantInfo.matchingDiameter / 2.0;
-        pImpl->baseCenter[0] = pImpl->startPoint[0];
-        pImpl->baseCenter[1] = pImpl->startPoint[1];
-        pImpl->baseCenter[2] = pImpl->startPoint[2];
-        pImpl->baseBottomRadius = pImpl->neckRadius > 0.0 ? pImpl->neckRadius : 1.0;
-        pImpl->baseTopLoftRadius = pImpl->totalRadius > 0.0 ? pImpl->totalRadius : 0.8;
-        pImpl->baseHeight = 1.0;
+        if (implantInfo.diameter > 0.0) pImpl->totalRadius = implantInfo.diameter / 2.0;
+        if (implantInfo.matchingDiameter > 0.0) pImpl->neckRadius = implantInfo.matchingDiameter / 2.0;
+        
         savePath = implantInfo.stlPath.toStdString();
         if (!savePath.empty()) {
             const std::size_t extPos = savePath.find_last_of('.');
@@ -115,8 +107,8 @@
         pImpl->baseCenter[1] = y;
         pImpl->baseCenter[2] = z;
     }
-    void ComponentCreator::setBaseBottomRadius(double radius) { pImpl->baseBottomRadius = radius; }
-    void ComponentCreator::setBaseTopRadius(double radius) { pImpl->baseTopLoftRadius = radius; }
+    void ComponentCreator::setBaseBottomDiameter(double diameter) { pImpl->baseBottomRadius = diameter / 2.0; }
+    void ComponentCreator::setBaseTopDiameter(double diameter) { pImpl->baseTopLoftRadius = diameter / 2.0; }
     void ComponentCreator::setBaseAngle(double angle) { pImpl->baseAngle = qBound(0.0, angle, 50.0); }
     void ComponentCreator::setBaseAzimuth(double angle) { pImpl->baseAzimuth = angle; }
     void ComponentCreator::setBaseHeight(double height) { pImpl->baseHeight = height; }

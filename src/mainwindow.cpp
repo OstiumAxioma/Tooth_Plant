@@ -57,9 +57,9 @@ QString baseStlOutputPath()
 DataDefine::ImplantInfoStu defaultImplantInfo()
 {
     DataDefine::ImplantInfoStu info;
-    info.diameter = 1.6;
-    info.length = 4.0;
-    info.matchingDiameter = 2.4;
+    info.diameter = 2.5;
+    info.length = 8.0;
+    info.matchingDiameter = 2.5;
     info.stlPath = stlOutputPath().toStdString();
     return info;
 }
@@ -206,8 +206,8 @@ void MainWindow::updateActorFromControls()
     int resolution = resolutionSlider->value();
     double threadDepth = toSize(threadDepthSlider);
     int threadTurns = threadTurnsSlider->value();
-    double baseBottomRadius = toSize(abutmentBottomRadiusSlider);
-    double baseTopRadius = toSize(abutmentTopRadiusSlider);
+    double baseBottomDiameter = toSize(abutmentBottomDiameterSlider);
+    double baseTopDiameter = toSize(abutmentTopDiameterSlider);
     double baseAngle = abutmentAngleSlider->value();
     double baseAzimuth = abutmentAzimuthSlider->value();
     double baseHeight = toHeight(abutmentHeightSlider);
@@ -221,8 +221,8 @@ void MainWindow::updateActorFromControls()
     componentCreator->setThreadTurns(threadTurns);
     componentCreator->setTotalDiameter(totalDiameter);
     componentCreator->setBaseCenter(start[0], start[1], start[2]);
-    componentCreator->setBaseBottomRadius(baseBottomRadius);
-    componentCreator->setBaseTopRadius(baseTopRadius);
+    componentCreator->setBaseBottomDiameter(baseBottomDiameter);
+    componentCreator->setBaseTopDiameter(baseTopDiameter);
     componentCreator->setBaseAngle(baseAngle);
     componentCreator->setBaseAzimuth(baseAzimuth);
     componentCreator->setBaseHeight(baseHeight);
@@ -306,17 +306,17 @@ QWidget* MainWindow::buildControls()
     // 总直径
     {
         auto grp = makeGroup("植体总直径");
-        makeSliderRow(grp.second, "D", 1, 100, 16, radiusSlider, radiusValueLabel); // 0.1~10.0
+        makeSliderRow(grp.second, "D", 1, 100, 25, radiusSlider, radiusValueLabel); // 0.1~10.0
         layout->addWidget(grp.first);
     }
 
     // 尺寸高度
     {
         auto grp = makeGroup("几何尺寸 (单位对应坐标缩放 0.1)");
-        makeSliderRow(grp.second, "Neck高度", 1, 300, 10, neckHeightSlider, neckHeightValueLabel);   // 截锥，默认1.0
-        makeSliderRow(grp.second, "Body高度", 1, 300, 20, bodyHeightSlider, bodyHeightValueLabel);  // 圆柱，默认2.0
-        makeSliderRow(grp.second, "Head高度", 1, 300, 10, headHeightSlider, headHeightValueLabel);  // 默认1.0
-        makeSliderRow(grp.second, "Neck直径", 1, 300, 24, neckDiameterSlider, neckDiameterValueLabel); // 0.1~30.0
+        makeSliderRow(grp.second, "Neck高度", 1, 300, 40, neckHeightSlider, neckHeightValueLabel);
+        makeSliderRow(grp.second, "Body高度", 1, 300, 80, bodyHeightSlider, bodyHeightValueLabel);
+        makeSliderRow(grp.second, "Head高度", 1, 300, 10, headHeightSlider, headHeightValueLabel);
+        makeSliderRow(grp.second, "Neck直径", 1, 300, 25, neckDiameterSlider, neckDiameterValueLabel);
         makeSliderRow(grp.second, "分段(Resolution)", 8, 120, 32, resolutionSlider, resolutionValueLabel);
         makeSliderRow(grp.second, "螺纹深度", 0, 100, 1, threadDepthSlider, threadDepthValueLabel); // 默认0.1
         makeSliderRow(grp.second, "螺纹圈数", 0, 50, 20, threadTurnsSlider, threadTurnsValueLabel); // 默认20
@@ -326,11 +326,11 @@ QWidget* MainWindow::buildControls()
     // 基台参数
     {
         auto grp = makeGroup("基台参数");
-        makeSliderRow(grp.second, "下圆半径", 1, 100, 12, abutmentBottomRadiusSlider, abutmentBottomRadiusValueLabel);
-        makeSliderRow(grp.second, "上圆半径", 1, 100, 8, abutmentTopRadiusSlider, abutmentTopRadiusValueLabel);
+        makeSliderRow(grp.second, "下端直径", 1, 100, 50, abutmentBottomDiameterSlider, abutmentBottomDiameterValueLabel);
+        makeSliderRow(grp.second, "上端直径", 1, 100, 50, abutmentTopDiameterSlider, abutmentTopDiameterValueLabel);
         makeSliderRow(grp.second, "夹角", 0, 50, 15, abutmentAngleSlider, abutmentAngleValueLabel);
         makeSliderRow(grp.second, "方位角", 0, 359, 0, abutmentAzimuthSlider, abutmentAzimuthValueLabel);
-        makeSliderRow(grp.second, "基台高度", 1, 200, 10, abutmentHeightSlider, abutmentHeightValueLabel);
+        makeSliderRow(grp.second, "基台高度", 1, 200, 50, abutmentHeightSlider, abutmentHeightValueLabel);
         layout->addWidget(grp.first);
     }
 
@@ -360,8 +360,8 @@ QWidget* MainWindow::buildControls()
     connectSlider(resolutionSlider);
     connectSlider(threadDepthSlider);
     connectSlider(threadTurnsSlider);
-    connectSlider(abutmentBottomRadiusSlider);
-    connectSlider(abutmentTopRadiusSlider);
+    connectSlider(abutmentBottomDiameterSlider);
+    connectSlider(abutmentTopDiameterSlider);
     connectSlider(abutmentAngleSlider);
     connectSlider(abutmentAzimuthSlider);
     connectSlider(abutmentHeightSlider);
@@ -399,8 +399,8 @@ void MainWindow::updateValueLabels()
     resolutionValueLabel->setText(QString::number(resolutionSlider->value()));
     threadDepthValueLabel->setText(QString::number(toSize(threadDepthSlider), 'f', 1));
     threadTurnsValueLabel->setText(QString::number(threadTurnsSlider->value()));
-    abutmentBottomRadiusValueLabel->setText(QString::number(toSize(abutmentBottomRadiusSlider), 'f', 1));
-    abutmentTopRadiusValueLabel->setText(QString::number(toSize(abutmentTopRadiusSlider), 'f', 1));
+    abutmentBottomDiameterValueLabel->setText(QString::number(toSize(abutmentBottomDiameterSlider), 'f', 1));
+    abutmentTopDiameterValueLabel->setText(QString::number(toSize(abutmentTopDiameterSlider), 'f', 1));
     abutmentAngleValueLabel->setText(QString::number(abutmentAngleSlider->value()) + QChar(176));
     abutmentAzimuthValueLabel->setText(QString::number(abutmentAzimuthSlider->value()) + QChar(176));
     abutmentHeightValueLabel->setText(QString::number(toHeight(abutmentHeightSlider), 'f', 1));

@@ -23,13 +23,13 @@ public:
     // 设置种植体轴线起点。
     void setStartPoint(double x, double y, double z);
 
-    // 设置颈部高度。
+    // 设置基台穿龈高度。
     void setNeckHeight(double height);
-    // 设置主体高度。
+    // 设置植体柱体高度。
     void setBodyHeight(double height);
-    // 设置头部高度。
+    // 设置植体冠部高度。
     void setHeadHeight(double height);
-    // 设置颈部(Neck)直径。
+    // 设置接口直径。
     void setNeckDiameter(double diameter);
     // 设置圆周采样分段数。
     void setResolution(int resolution);
@@ -38,7 +38,7 @@ public:
     // 设置螺纹圈数。
     void setThreadTurns(int turns);
     // 设置种植体总直径。
-    void setTotalDiameter(double radius);
+    void setTotalDiameter(double diameter);
 
     // 按当前参数构建种植体 Actor。
     bool buildActor(int resolution = 32);
@@ -55,15 +55,15 @@ public:
     vtkActor* getBase() const;
     // 设置Neck生成起始点（Neck延法向向上延伸，基台在Neck上方生成）。
     void setBaseCenter(double x, double y, double z);
-    // 设置基台下圆半径。
-    void setBaseBottomRadius(double radius);
-    // 设置基台上圆半径。
-    void setBaseTopRadius(double radius);
+    // 设置基台下端直径。
+    void setBaseBottomDiameter(double diameter);
+    // 设置基台上端直径。
+    void setBaseTopDiameter(double diameter);
     // 设置基台夹角，单位为度，范围限制为 0 到 50。
     void setBaseAngle(double angle);
     // 设置基台方位角，单位为度。
     void setBaseAzimuth(double angle);
-    // 设置基台高度。
+    // 设置基台上部高度。
     void setBaseHeight(double height);
 
 private:
