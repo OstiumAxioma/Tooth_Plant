@@ -39,6 +39,8 @@ public:
     void setThreadTurns(int turns);
     // 设置种植体总直径。
     void setTotalDiameter(double diameter);
+    // 设置种植体内径。
+    void setInnerDiameter(double diameter);
 
     // 按当前参数构建种植体 Actor。
     bool buildActor(int resolution = 32);

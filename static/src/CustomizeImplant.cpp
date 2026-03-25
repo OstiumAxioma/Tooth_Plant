@@ -31,6 +31,7 @@
         double headHeight{ 1.0 };
         double neckRadius{ 1.25 };
         double totalRadius{ 1.25 };
+        double innerRadius{ 0.0 };
         int resolution{ 32 };
         double threadDepth{ 0.0 };
         int threadTurns{ 0 };
@@ -93,6 +94,11 @@
     void ComponentCreator::setTotalDiameter(double diameter)
     {
         pImpl->totalRadius = diameter / 2;
+    }
+
+    void ComponentCreator::setInnerDiameter(double diameter)
+    {
+        pImpl->innerRadius = diameter / 2.0;
     }
 
     void ComponentCreator::setNeckHeight(double height) { pImpl->neckHeight = height; }
@@ -353,7 +359,7 @@
             return poly;
         }
 
-        vtkSmartPointer<vtkPolyData> BuildCylinderWorld(double radius, double height, int resolution, double z0,
+        vtkSmartPointer<vtkPolyData> BuildCylinderWorld(double radius, double innerRadius, double height, int resolution, double z0,
             const double start[3], const Basis& basis) {
             auto points = vtkSmartPointer<vtkPoints>::New();
             auto polys = vtkSmartPointer<vtkCellArray>::New();
@@ -373,13 +379,29 @@
                 addPoint(radius, z0 + height, angle);
             }
 
-            double topCenter[3] = { start[0] + basis.n[0] * z0,
-                                    start[1] + basis.n[1] * z0,
-                                    start[2] + basis.n[2] * z0 };
+            vtkIdType topCenterId = -1;
+            vtkIdType* innerIds = nullptr;
+            if (innerRadius > 0.0) {
+                innerIds = new vtkIdType[resolution];
+                for (int i = 0; i < resolution; ++i) {
+                    double angle = full * i / resolution;
+                    double r = innerRadius;
+                    double c = std::cos(angle), s = std::sin(angle);
+                    double x = start[0] + basis.n[0] * z0 + basis.u[0] * r * c + basis.v[0] * r * s;
+                    double y = start[1] + basis.n[1] * z0 + basis.u[1] * r * c + basis.v[1] * r * s;
+                    double zc = start[2] + basis.n[2] * z0 + basis.u[2] * r * c + basis.v[2] * r * s;
+                    innerIds[i] = points->InsertNextPoint(x, y, zc);
+                }
+            } else {
+                double topCenter[3] = { start[0] + basis.n[0] * z0,
+                                        start[1] + basis.n[1] * z0,
+                                        start[2] + basis.n[2] * z0 };
+                topCenterId = points->InsertNextPoint(topCenter);
+            }
+
             double bottomCenter[3] = { start[0] + basis.n[0] * (z0 + height),
                                        start[1] + basis.n[1] * (z0 + height),
                                        start[2] + basis.n[2] * (z0 + height) };
-            vtkIdType topCenterId = points->InsertNextPoint(topCenter);
             vtkIdType bottomCenterId = points->InsertNextPoint(bottomCenter);
 
             auto addTri = [&](vtkIdType a, vtkIdType b, vtkIdType c) {
@@ -398,9 +420,17 @@
 
                 addTri(t0, t1, b1);
                 addTri(t0, b1, b0);
-                addTri(topCenterId, t0, t1);
+                if (innerRadius > 0.0) {
+                    vtkIdType i0 = innerIds[i];
+                    vtkIdType i1 = innerIds[(i + 1) % resolution];
+                    addTri(i0, t0, t1);
+                    addTri(i0, t1, i1);
+                } else {
+                    addTri(topCenterId, t0, t1);
+                }
                 addTri(bottomCenterId, b1, b0);
             }
+            if (innerIds) delete[] innerIds;
 
             auto poly = vtkSmartPointer<vtkPolyData>::New();
             poly->SetPoints(points);
@@ -408,11 +438,11 @@
             return poly;
         }
 
-        vtkSmartPointer<vtkPolyData> BuildThreadedCylinderWorld(double radius, double depth, double height, int turns,
+        vtkSmartPointer<vtkPolyData> BuildThreadedCylinderWorld(double radius, double innerRadius, double depth, double height, int turns,
             int resolution, double z0,
             const double start[3], const Basis& basis) {
             if (turns <= 0 || depth <= 0.0) {
-                return BuildCylinderWorld(radius, height, resolution, z0, start, basis);
+                return BuildCylinderWorld(radius, innerRadius, height, resolution, z0, start, basis);
             }
 
             int resTheta = std::max(16, resolution);
@@ -496,28 +526,61 @@
                 }
             }
 
-            auto addCap = [&](bool top) {
-                int iz = top ? resZ : 0;
-                double z = z0 + height * (top ? 1.0 : 0.0);
-                double center[3] = { start[0] + basis.n[0] * z,
-                                     start[1] + basis.n[1] * z,
-                                     start[2] + basis.n[2] * z };
-                vtkIdType centerId = points->InsertNextPoint(center);
-                for (int it = 0; it < resTheta; ++it) {
-                    vtkIdType p0 = pointId(iz, it);
-                    vtkIdType p1 = pointId(iz, it + 1);
-                    auto tri = vtkSmartPointer<vtkTriangle>::New();
-                    if (top) {
-                        tri->GetPointIds()->SetId(0, centerId);
-                        tri->GetPointIds()->SetId(1, p1);
-                        tri->GetPointIds()->SetId(2, p0);
+            auto addCap = [&](bool isBottom) {
+                int iz = isBottom ? resZ : 0;
+                double z = z0 + height * (isBottom ? 1.0 : 0.0);
+                
+                if (!isBottom && innerRadius > 0.0) {
+                    vtkIdType* innerIds = new vtkIdType[resTheta];
+                    for (int it = 0; it < resTheta; ++it) {
+                        double theta = full * it / resTheta;
+                        double r = innerRadius;
+                        double c = std::cos(theta), s = std::sin(theta);
+                        double x = start[0] + basis.n[0] * z + basis.u[0] * r * c + basis.v[0] * r * s;
+                        double y = start[1] + basis.n[1] * z + basis.u[1] * r * c + basis.v[1] * r * s;
+                        double zc = start[2] + basis.n[2] * z + basis.u[2] * r * c + basis.v[2] * r * s;
+                        innerIds[it] = points->InsertNextPoint(x, y, zc);
                     }
-                    else {
-                        tri->GetPointIds()->SetId(0, centerId);
-                        tri->GetPointIds()->SetId(1, p0);
-                        tri->GetPointIds()->SetId(2, p1);
+                    for (int it = 0; it < resTheta; ++it) {
+                        vtkIdType p0 = pointId(iz, it);
+                        vtkIdType p1 = pointId(iz, it + 1);
+                        vtkIdType i0 = innerIds[it];
+                        vtkIdType i1 = innerIds[(it + 1) % resTheta];
+                        
+                        auto tri1 = vtkSmartPointer<vtkTriangle>::New();
+                        tri1->GetPointIds()->SetId(0, i0);
+                        tri1->GetPointIds()->SetId(1, p0);
+                        tri1->GetPointIds()->SetId(2, p1);
+                        polys->InsertNextCell(tri1);
+                        
+                        auto tri2 = vtkSmartPointer<vtkTriangle>::New();
+                        tri2->GetPointIds()->SetId(0, i0);
+                        tri2->GetPointIds()->SetId(1, p1);
+                        tri2->GetPointIds()->SetId(2, i1);
+                        polys->InsertNextCell(tri2);
                     }
-                    polys->InsertNextCell(tri);
+                    delete[] innerIds;
+                } else {
+                    double center[3] = { start[0] + basis.n[0] * z,
+                                         start[1] + basis.n[1] * z,
+                                         start[2] + basis.n[2] * z };
+                    vtkIdType centerId = points->InsertNextPoint(center);
+                    for (int it = 0; it < resTheta; ++it) {
+                        vtkIdType p0 = pointId(iz, it);
+                        vtkIdType p1 = pointId(iz, it + 1);
+                        auto tri = vtkSmartPointer<vtkTriangle>::New();
+                        if (isBottom) {
+                            tri->GetPointIds()->SetId(0, centerId);
+                            tri->GetPointIds()->SetId(1, p1);
+                            tri->GetPointIds()->SetId(2, p0);
+                        }
+                        else {
+                            tri->GetPointIds()->SetId(0, centerId);
+                            tri->GetPointIds()->SetId(1, p0);
+                            tri->GetPointIds()->SetId(2, p1);
+                        }
+                        polys->InsertNextCell(tri);
+                    }
                 }
             };
             addCap(true);
@@ -583,6 +646,59 @@
             return poly;
         }
 
+        vtkSmartPointer<vtkPolyData> BuildInnerHoleWorld(double radius, double height, int resolution, double z0,
+            const double start[3], const Basis& basis) {
+            auto points = vtkSmartPointer<vtkPoints>::New();
+            auto polys = vtkSmartPointer<vtkCellArray>::New();
+            const double full = vtkMath::Pi() * 2.0;
+
+            auto addPoint = [&](double r, double z, double angle) {
+                double c = std::cos(angle), s = std::sin(angle);
+                double x = start[0] + basis.n[0] * z + basis.u[0] * r * c + basis.v[0] * r * s;
+                double y = start[1] + basis.n[1] * z + basis.u[1] * r * c + basis.v[1] * r * s;
+                double zc = start[2] + basis.n[2] * z + basis.u[2] * r * c + basis.v[2] * r * s;
+                points->InsertNextPoint(x, y, zc);
+            };
+
+            for (int i = 0; i < resolution; ++i) {
+                double angle = full * i / resolution;
+                addPoint(radius, z0, angle);
+                addPoint(radius, z0 + height, angle);
+            }
+
+            double bottomCenter[3] = { start[0] + basis.n[0] * (z0 + height),
+                                       start[1] + basis.n[1] * (z0 + height),
+                                       start[2] + basis.n[2] * (z0 + height) };
+            vtkIdType bottomCenterId = points->InsertNextPoint(bottomCenter);
+
+            auto addTri = [&](vtkIdType a, vtkIdType b, vtkIdType c) {
+                auto tri = vtkSmartPointer<vtkTriangle>::New();
+                tri->GetPointIds()->SetId(0, a);
+                tri->GetPointIds()->SetId(1, b);
+                tri->GetPointIds()->SetId(2, c);
+                polys->InsertNextCell(tri);
+            };
+
+            for (int i = 0; i < resolution; ++i) {
+                vtkIdType t0 = 2 * i;
+                vtkIdType b0 = t0 + 1;
+                vtkIdType t1 = 2 * ((i + 1) % resolution);
+                vtkIdType b1 = t1 + 1;
+
+                // Inner wall surface faces INWARD
+                addTri(t0, b1, t1);
+                addTri(t0, b0, b1);
+
+                // Bottom Cap normal faces UPwards (into the hole)
+                addTri(bottomCenterId, b0, b1);
+            }
+
+            auto poly = vtkSmartPointer<vtkPolyData>::New();
+            poly->SetPoints(points);
+            poly->SetPolys(polys);
+            return poly;
+        }
+
         vtkSmartPointer<vtkPolyData> BuildThreadWorld(double radius, double depth, double height, int turns, int resolution,
             double z0, const double start[3], const Basis& basis) {
             auto empty = vtkSmartPointer<vtkPolyData>::New();
@@ -608,6 +724,12 @@
             return false;
         }
 
+        double safeInnerRadius = pImpl->innerRadius;
+        if (safeInnerRadius >= radius) {
+            safeInnerRadius = radius - 1e-3;
+            if (safeInnerRadius < 0.0) safeInnerRadius = 0.0;
+        }
+
         int segments = std::max(8, (pImpl->resolution > 3 ? pImpl->resolution : resolution));
 
         double neckH = pImpl->neckHeight > 0.0 ? pImpl->neckHeight : 1.0;
@@ -624,13 +746,18 @@
         int threadTurns = pImpl->threadTurns > 0 ? pImpl->threadTurns : 20;
 
         auto body = (threadDepth > 0.0 && threadTurns > 0)
-            ? BuildThreadedCylinderWorld(radius, threadDepth, bodyH, threadTurns, segments, 0.0, pImpl->startPoint, basis)
-            : BuildCylinderWorld(radius, bodyH, segments, 0.0, pImpl->startPoint, basis);
+            ? BuildThreadedCylinderWorld(radius, safeInnerRadius, threadDepth, bodyH, threadTurns, segments, 0.0, pImpl->startPoint, basis)
+            : BuildCylinderWorld(radius, safeInnerRadius, bodyH, segments, 0.0, pImpl->startPoint, basis);
         auto head = BuildHemisphereWorld(radius, headH, segments, bodyH, pImpl->startPoint, basis);
 
         auto append = vtkSmartPointer<vtkAppendPolyData>::New();
         append->AddInputData(body);
         append->AddInputData(head);
+        
+        if (safeInnerRadius > 0.0) {
+            auto hole = BuildInnerHoleWorld(safeInnerRadius, bodyH, segments, 0.0, pImpl->startPoint, basis);
+            append->AddInputData(hole);
+        }
         append->Update();
 
         auto clean = vtkSmartPointer<vtkCleanPolyData>::New();
@@ -704,7 +831,7 @@
         topFrame.basis = bottomFrame.basis;
         topFrame.radius = topRadius;
 
-        auto neckLayer = BuildCylinderWorld(neckRadius, neckHeight, segments, 0.0, pImpl->baseCenter, lowerBasis);
+        auto neckLayer = BuildCylinderWorld(neckRadius, 0.0, neckHeight, segments, 0.0, pImpl->baseCenter, lowerBasis);
 
         auto bottomCap = BuildDiskWorld(bottomFrame, segments, true);
         auto topCap = BuildDiskWorld(topFrame, segments, false);

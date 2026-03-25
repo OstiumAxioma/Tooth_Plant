@@ -70,6 +70,7 @@ private:
     QSlider *neckHeightSlider;
     QSlider *bodyHeightSlider;
     QSlider *headHeightSlider;
+    QSlider *innerDiameterSlider;
     QSlider *neckDiameterSlider;
     QSlider *resolutionSlider;
     QSlider *threadDepthSlider;
@@ -84,6 +85,7 @@ private:
     QLabel *neckHeightValueLabel;
     QLabel *bodyHeightValueLabel;
     QLabel *headHeightValueLabel;
+    QLabel *innerDiameterValueLabel;
     QLabel *neckDiameterValueLabel;
     QLabel *resolutionValueLabel;
     QLabel *threadDepthValueLabel;

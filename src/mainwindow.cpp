@@ -201,7 +201,9 @@ void MainWindow::updateActorFromControls()
     double neckH = toHeight(neckHeightSlider);
     double bodyH = toHeight(bodyHeightSlider);
     double headH = toHeight(headHeightSlider);
+    double innerDiameter = toSize(innerDiameterSlider);
     double totalDiameter = toSize(radiusSlider);
+
     double neckDiameter = toSize(neckDiameterSlider);
     int resolution = resolutionSlider->value();
     double threadDepth = toSize(threadDepthSlider);
@@ -215,6 +217,7 @@ void MainWindow::updateActorFromControls()
     componentCreator->setNeckHeight(neckH);
     componentCreator->setBodyHeight(bodyH);
     componentCreator->setHeadHeight(headH);
+    componentCreator->setInnerDiameter(innerDiameter);
     componentCreator->setNeckDiameter(neckDiameter);
     componentCreator->setResolution(resolution);
     componentCreator->setThreadDepth(threadDepth);
@@ -316,6 +319,7 @@ QWidget* MainWindow::buildControls()
         makeSliderRow(grp.second, "Neck高度", 1, 300, 40, neckHeightSlider, neckHeightValueLabel);
         makeSliderRow(grp.second, "Body高度", 1, 300, 80, bodyHeightSlider, bodyHeightValueLabel);
         makeSliderRow(grp.second, "Head高度", 1, 300, 10, headHeightSlider, headHeightValueLabel);
+        makeSliderRow(grp.second, "内径", 0, 100, 0, innerDiameterSlider, innerDiameterValueLabel);
         makeSliderRow(grp.second, "Neck直径", 1, 300, 25, neckDiameterSlider, neckDiameterValueLabel);
         makeSliderRow(grp.second, "分段(Resolution)", 8, 120, 32, resolutionSlider, resolutionValueLabel);
         makeSliderRow(grp.second, "螺纹深度", 0, 100, 1, threadDepthSlider, threadDepthValueLabel); // 默认0.1
@@ -356,6 +360,7 @@ QWidget* MainWindow::buildControls()
     connectSlider(neckHeightSlider);
     connectSlider(bodyHeightSlider);
     connectSlider(headHeightSlider);
+    connectSlider(innerDiameterSlider);
     connectSlider(neckDiameterSlider);
     connectSlider(resolutionSlider);
     connectSlider(threadDepthSlider);
@@ -395,6 +400,7 @@ void MainWindow::updateValueLabels()
     neckHeightValueLabel->setText(QString::number(toHeight(neckHeightSlider), 'f', 1));
     bodyHeightValueLabel->setText(QString::number(toHeight(bodyHeightSlider), 'f', 1));
     headHeightValueLabel->setText(QString::number(toHeight(headHeightSlider), 'f', 1));
+    innerDiameterValueLabel->setText(QString::number(toSize(innerDiameterSlider), 'f', 1));
     neckDiameterValueLabel->setText(QString::number(toSize(neckDiameterSlider), 'f', 1));
     resolutionValueLabel->setText(QString::number(resolutionSlider->value()));
     threadDepthValueLabel->setText(QString::number(toSize(threadDepthSlider), 'f', 1));
