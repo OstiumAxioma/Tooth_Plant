@@ -25,7 +25,8 @@ class QVTKOpenGLWidget;
 class vtkRenderer;
 template <class T> class vtkSmartPointer;
 
-class ComponentCreator;
+class ImplantCreator;
+class BaseCreator;
 
 class MainWindow : public QMainWindow
 {
@@ -62,7 +63,8 @@ private:
 
     // 渲染器和组件生成器
     vtkSmartPointer<vtkRenderer> renderer;
-    std::unique_ptr<ComponentCreator> componentCreator;
+    std::unique_ptr<ImplantCreator> implantCreator;
+    std::unique_ptr<BaseCreator>    baseCreator;
 
     // 控制滑块
     QSlider *startSliders[3];

@@ -54,17 +54,9 @@ QString baseStlOutputPath()
     return QDir(projectRootPath()).filePath("customize_implant_preview_base.stl");
 }
 
-DataDefine::ImplantInfoStu defaultImplantInfo()
-{
-    DataDefine::ImplantInfoStu info;
-    info.diameter = 2.5;
-    info.length = 8.0;
-    info.matchingDiameter = 2.5;
-    info.stlPath = stlOutputPath().toStdString();
-    return info;
-}
-
 } // namespace
+
+
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -73,7 +65,8 @@ MainWindow::MainWindow(QWidget *parent)
     , renderLayout(nullptr)
     , renderPlaceholder(nullptr)
     , renderer(nullptr)
-    , componentCreator(std::make_unique<ComponentCreator>(defaultImplantInfo()))
+    , implantCreator(std::make_unique<ImplantCreator>())
+    , baseCreator(std::make_unique<BaseCreator>())
 {
     setWindowTitle("VTK Qt 项目");
     resize(800, 600);
@@ -196,14 +189,11 @@ void MainWindow::updateActorFromControls()
 
     double start[3] = { toCoord(startSliders[0]), toCoord(startSliders[1]), toCoord(startSliders[2]) };
 
-    componentCreator->setStartPoint(start[0], start[1], start[2]);
-
     double neckH = toHeight(neckHeightSlider);
     double bodyH = toHeight(bodyHeightSlider);
     double headH = toHeight(headHeightSlider);
     double innerDiameter = toSize(innerDiameterSlider);
     double totalDiameter = toSize(radiusSlider);
-
     double neckDiameter = toSize(neckDiameterSlider);
     int resolution = resolutionSlider->value();
     double threadDepth = toSize(threadDepthSlider);
@@ -214,36 +204,41 @@ void MainWindow::updateActorFromControls()
     double baseAzimuth = abutmentAzimuthSlider->value();
     double baseHeight = toHeight(abutmentHeightSlider);
 
-    componentCreator->setNeckHeight(neckH);
-    componentCreator->setBodyHeight(bodyH);
-    componentCreator->setHeadHeight(headH);
-    componentCreator->setInnerDiameter(innerDiameter);
-    componentCreator->setNeckDiameter(neckDiameter);
-    componentCreator->setResolution(resolution);
-    componentCreator->setThreadDepth(threadDepth);
-    componentCreator->setThreadTurns(threadTurns);
-    componentCreator->setTotalDiameter(totalDiameter);
-    componentCreator->setBaseCenter(start[0], start[1], start[2]);
-    componentCreator->setBaseBottomDiameter(baseBottomDiameter);
-    componentCreator->setBaseTopDiameter(baseTopDiameter);
-    componentCreator->setBaseAngle(baseAngle);
-    componentCreator->setBaseAzimuth(baseAzimuth);
-    componentCreator->setBaseHeight(baseHeight);
+    implantCreator->setStartPoint(start[0], start[1], start[2]);
+    implantCreator->setNeckHeight(neckH);
+    implantCreator->setBodyHeight(bodyH);
+    implantCreator->setHeadHeight(headH);
+    implantCreator->setInnerDiameter(innerDiameter);
+    implantCreator->setNeckDiameter(neckDiameter);
+    implantCreator->setResolution(resolution);
+    implantCreator->setThreadDepth(threadDepth);
+    implantCreator->setThreadTurns(threadTurns);
+    implantCreator->setTotalDiameter(totalDiameter);
 
-    const bool implantOk = componentCreator->buildActor(resolution);
-    const bool baseOk = componentCreator->buildBase(resolution);
+    baseCreator->setBaseCenter(start[0], start[1], start[2]);
+    baseCreator->setNeckHeight(neckH);
+    baseCreator->setNeckDiameter(neckDiameter);
+    baseCreator->setBaseBottomDiameter(baseBottomDiameter);
+    baseCreator->setBaseTopDiameter(baseTopDiameter);
+    baseCreator->setBaseAngle(baseAngle);
+    baseCreator->setBaseAzimuth(baseAzimuth);
+    baseCreator->setBaseHeight(baseHeight);
+    baseCreator->setResolution(resolution);
+
+    const bool implantOk = implantCreator->buildActor(resolution);
+    const bool baseOk    = baseCreator->buildBase(resolution);
 
     renderer->RemoveAllViewProps();
 
     if (implantOk) {
-        if (vtkActor* actor = componentCreator->getActor()) {
+        if (vtkActor* actor = implantCreator->getActor()) {
             actor->GetProperty()->SetColor(0.82, 0.82, 0.85);
             renderer->AddActor(actor);
         }
     }
 
     if (baseOk) {
-        if (vtkActor* actor = componentCreator->getBase()) {
+        if (vtkActor* actor = baseCreator->getBase()) {
             actor->GetProperty()->SetColor(0.92, 0.72, 0.32);
             renderer->AddActor(actor);
         }
